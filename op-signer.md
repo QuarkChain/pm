@@ -119,7 +119,6 @@ cd infra/op-signer
 make
 ```
 
-
 ### Generate Server TLS
 
 While in `infra/op-signer`, set the domain name or IP address of the server as the value of `SIGNER_SERVER_HOST` environment variable, and generate TLS:
@@ -129,17 +128,19 @@ export SIGNER_SERVER_HOST=65.108.236.27
 ./tls-server.sh
 ```
 
-You will receive several CA and TLS-related files:
+You will receive several CA and TLS-related files in `tls-server` folder:
 
 ```bash
-tls
+tls-server
 ├── ca.crt
 ├── ca.key
+├── ca.srl
 ├── tls.crt
 ├── tls.csr
 └── tls.key
 ```
-
+> ⚠️ **Note:** 
+> If the CA key is compromised, an attacker can issue any certificate using it, which will be recognized as legitimate by the system.
 
 ### Configure Google API Credentials
 
@@ -184,50 +185,40 @@ Output example:
 0: projects/signing-test-450710/locations/global/keyRings/op-signer/cryptoKeys/op-challenger-1/cryptoKeyVersions/1 => 0x74D3b2A1c7cD4Aea7AF3Ce8C08Cf5132ECBA64ED
 ```
 
-
 ### Start op-signer Service
 
 In the `op-signer` folder, execute this command:
 
 ```bash
-./bin/op-signer
+./bin/op-signer \
+--signer.tls.cert=./tls-server/tls.crt \
+--signer.tls.ca=./tls-server/ca.crt \
+--signer.tls.key=./tls-server/tls.key 
 ```
 
 
 ## Configure Signer Client
 
-### Prepare CA Files
-
-First, copy the CA certificate and key from the server side to where your client component will run. Ensure that this folder structure exists before generating TLS for the client:
-
-```bash
-tls
-├── ca.crt
-└── ca.key
-```
-
-
 ### Generate Client TLS
 
-Pick a DNS for your client connecting to op-signer as value for `SIGNER_CLIENT_DNS`. This DNS should match one of those specified in your server's auth configuration (e.g., `op-challenger.beta.swc.quarkchain.io`). Now generate TLS:
+Pick a DNS for your client connecting to op-signer as value for `SIGNER_CLIENT_DNS`. This DNS should match one of those specified in your server's auth configuration (e.g., `op-challenger.beta.swc.quarkchain.io`). 
+
+Log on to the server where your op-signer service deployed in [this step](#build-the-source), and go to `op-signer` directory. Now set environment variable `SIGNER_CLIENT_DNS`, and generate TLS:
 
 ```bash 
 export SIGNER_CLIENT_DNS=op-challenger.beta.swc.quarkchain.io 
-curl -fsSL https://raw.githubusercontent.com/QuarkChain/infra/refs/heads/dl-tls/op-signer/tls-client.sh | bash 
+./tls-client.sh
 ```
 
 You should now have these files in your `tls` folder:
 
 ```bash 
 tls 
-├── ca.crt 
-├── ca.key 
-├── ca.srl 
 ├── tls.crt 
 ├── tls.csr 
 └── tls.key 
 ```
-
+Now, you can move the folder to the client where the signer service is being called from.
 
 ### Set Client Flags
 
