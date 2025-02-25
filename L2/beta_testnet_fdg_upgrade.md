@@ -19,7 +19,7 @@
 op-program/chainconfig/configs/3335-genesis-l2.json
 op-program/chainconfig/configs/3335-rollup.json
 ```
-3. Run `make reproducible-prestate` to get correct absolute prestate：`0x03972e7f423d6ad3a7cdc9537ac452f1e3ebe3bd2e4c6bb5c5ca3edeec5c2908`
+3. Run `make reproducible-prestate` to get correct absolute prestate：`0x03725e4fea19be29e31f014c94c85a12be70ad1f17b4f939094a7e9d56ef7bdf`
 4. Attributes from the permissioned FDG can be queried like below：
 ```bash
 # cast call $DISPUTE_GAME_FACTORY_PROXY_ADDRESS 'gameImpls(uint32)(address)' 1 -r $L1_RPC_URL
@@ -40,7 +40,7 @@ op-program/chainconfig/configs/3335-rollup.json
 op-deployer/bin/op-deployer bootstrap disputegame --l1-rpc-url $L1_RPC_URL --private-key $GS_ADMIN_PRIVATE_KEY \
     --artifacts-locator "file:///root/xu/beta_testnet/optimism/packages/contracts-bedrock/forge-artifacts/" \
     --vm 0xd2cd9d02fd5f58a42e2496f82254f0a1ccc3fa29 --game-kind FaultDisputeGame --game-type 0 \
-    --absolute-prestate 0x03972e7f423d6ad3a7cdc9537ac452f1e3ebe3bd2e4c6bb5c5ca3edeec5c2908 \
+    --absolute-prestate 0x03725e4fea19be29e31f014c94c85a12be70ad1f17b4f939094a7e9d56ef7bdf \
     --max-game-depth 73 --split-depth 30 --clock-extension 10800 --max-clock-duration 302400 \
     --delayed-weth-proxy $DELAYED_WETHPERMISSIONED_GAME_PROXY_ADDRESS \
     --anchor-state-registry-proxy $ANCHOR_STATE_REGISTRY_PROXY_ADDRESS --l2-chain-id 3335 
