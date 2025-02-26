@@ -1,33 +1,60 @@
 
 # SWC Key Management Manual
 
-## Table of Contents
+## Table of Contents  
 
-1. [Introduction](#introduction)
-2. [Cloud KMS Preparation](#cloud-kms-preparation)
-    - [Create a Service Account](#create-a-service-account)
-    - [Get Service Account Key File](#get-service-account-key-file)
-3. [Create a KMS Key](#create-a-kms-key)
-    - [Enable Access to KMS API](#enable-access-to-kms-api)
-    - [Create a Key Ring](#create-a-key-ring)
-    - [Create a Key](#create-a-key)
-    - [Grant Permissions](#grant-permissions)
-    - [Get Resource Name of the Key](#get-resource-name-of-the-key)
-4. [Deploy op-signer Service](#deploy-op-signer-service)
-    - [Build the Source](#build-the-source)
-    - [Generate Server TLS](#generate-server-tls)
-    - [Configure Google API Credentials](#configure-google-api-credentials)
-    - [Configure Auth](#configure-auth)
-    - [Retrieve Addresses](#retrieve-addresses)
-    - [Start op-signer Service](#start-op-signer-service)
-5. [Configure Signer Client](#configure-signer-client)
-    - [Prepare CA files](#prepare-ca-files)
-    - [Generate Client TLS](#generate-client-tls)
-    - [Set Client Flags](#set-client-flags)
+1. [Introduction](#introduction)  
+   - [Why Cloud KMS](#why-cloud-kms)  
+   - [Integrating KMS with the OP-Signer Service](#integrating-kms-with-the-op-signer-service)  
+
+2. [Cloud KMS Preparation](#cloud-kms-preparation)  
+   - [Create a Service Account](#create-a-service-account)  
+   - [Get Service Account Key File](#get-service-account-key-file)  
+
+3. [Create a KMS Key](#create-a-kms-key)  
+   - [Enable Access to KMS API](#enable-access-to-kms-api)  
+   - [Create a Key Ring](#create-a-key-ring)  
+   - [Create a Key](#create-a-key)  
+   - [Grant Permissions](#grant-permissions)  
+   - [Get Resource Name of the Key](#get-resource-name-of-the-key)  
+
+4. [Deploy op-signer Service](#deploy-op-signer-service)  
+   - [Build the Source](#build-the-source)  
+   - [Generate Server TLS](#generate-server-tls)  
+   - [Configure Google API Credentials](#configure-google-api-credentials)  
+   - [Configure Auth](#configure-auth)  
+   - [Retrieve Addresses](#retrieve-addresses)  
+   - [Start op-signer Service](#start-op-signer-service)  
+
+5. [Configure Signer Client](#configure-signer-client)  
+   - [Prepare CA Files](#prepare-ca-files)  
+   - [Generate Client TLS](#generate-client-tls)  
+   - [Set Client Flags](#set-client-flags)  
+
+6. [Summary](#summary)  
 
 ## Introduction
 
-Cloud Key Management Service (Cloud KMS) enables you to create and manage cryptographic keys securely. This document provides guidance on setting up a remote signing system utilizing Optimism's `op-signer` service. The system allows clients to send transactions through RPC, secured by mTLS, while `op-signer` interacts with Google Cloud Platform's Hardware Security Module (GCP HSM) to finalize the signing process.
+This document provides guidance on setting up a remote signing system utilizing Optimism's `op-signer` service backed by Cloud KMS.
+
+### Why Cloud KMS
+
+Cryptographic key management is a critical safeguard for blockchain operators, particularly for protecting high-risk components like batcher, proposer, and challenger hot wallets.  If these addresses are compromised, the system can be exploited in addition to funds lost:
+-  Compromised batcher address can cause L2 reorgs or sequencer outages.
+-  Compromised proposer address could propose invalid state proposals that can be used to execute invalid withdrawals after 7 days.
+- Compromised challenger could invalidate valid state proposals and fail to challenge invalid state proposals.
+
+Storing keys in environment variables or passing them via CLI flags exposes systems to significant risks, such as accidental leakage or unauthorized access. Cloud Key Management Service (KMS) paired with Hardware Security Modules (HSMs) provides a robust solution by:
+ - Generating and managing cryptographic keys in FIPS-compliant, tamper-resistant hardware.
+ - Ensuring keys never leave secure, isolated environments, even during signing operations.
+
+### Integrating KMS with the OP-Signer Service
+The op-signer service acts as a secure bridge between your application and KMS. It enables transaction signing via a hardened workflow:
+1. Clients submit transaction requests through an RPC endpoint.
+2. Mutual TLS (mTLS) authentication validates both client and server identities, preventing unauthorized access.
+3. The op-signer forwards requests to KMS, where signing occurs within the HSM’s secure boundary.
+
+This end-to-end protection ensures sensitive keys remain shielded from exposure, even during transaction processing.
 
 ## Cloud KMS Preparation
 
@@ -250,4 +277,4 @@ For example, use op-challenger to perform an action against a specific game:
 
 ## Summary
 
-This manual provides comprehensive instructions on setting up Cloud Key Management Service (Cloud KMS) with Optimism's remote signing system using `op-signer`. By following these steps, users can securely manage cryptographic keys and facilitate secure transaction signing through RPC with mTLS authentication. The outlined procedures ensure that both server-side configurations and client-side interactions are properly established for effective operation within decentralized applications.
+This manual provides comprehensive instructions on setting up Cloud Key Management Service (Cloud KMS) with Optimism's remote signing system using `op-signer`. By following these steps, users can securely manage cryptographic keys and facilitate secure transaction signing through RPC with mTLS authentication.
