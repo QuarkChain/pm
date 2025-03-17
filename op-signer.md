@@ -148,11 +148,11 @@ make
 
 ### Generate Server TLS
 
-While in `infra/op-signer`, set the domain name or IP address of the server as the value of `SIGNER_SERVER_HOST` environment variable, and generate TLS:
+While in `infra/op-signer`, run the following command to generate TLS:
 
 ```bash
-export SIGNER_SERVER_HOST=65.108.236.27
-./tls-server.sh
+# Replace <Server IP address> with the real IP address of the server that the client uses to connect.
+./tls.sh server <Server IP address>
 ```
 
 You will receive several CA and TLS-related files in `tls-server` folder:
@@ -185,14 +185,14 @@ You can also change other configurations like port and log level in the `.envrc`
 
 Modify the config.yaml file to connect op-signer with your cloud KMS:
 
-- **name**: DNS name of the client connecting to op-signer; must match the DNS name in the TLS certificate (`SIGNER_CLIENT_DNS`) used in [this step](#generate-client-tls).
+- **name**: DNS name of the client connecting to op-signer. In practice, the IP address of the signer client should be used.
 - **key**: key resource name from Cloud KMS obtained from [this step](#get-resource-name-of-the-key).
 
 For example:
 
 ```yml
 auth:
-- name: op-challenger.beta.swc.quarkchain.io
+- name: 192.168.1.10
   key: projects/signing-test-450710/locations/global/keyRings/op-signer/cryptoKeys/op-challenger/cryptoKeyVersions/1
 ```
 
@@ -228,22 +228,23 @@ In the `op-signer` folder, execute this command:
 
 ### Generate Client TLS
 
-Pick a DNS for your client connecting to op-signer as value for `SIGNER_CLIENT_DNS`. This DNS should match one of those specified in your server's auth configuration (e.g., `op-challenger.beta.swc.quarkchain.io`). 
+Log on to the server where your op-signer service deployed in [this step](#build-the-source), and go to `op-signer` directory. 
 
-Log on to the server where your op-signer service deployed in [this step](#build-the-source), and go to `op-signer` directory. Now set environment variable `SIGNER_CLIENT_DNS`, and generate TLS:
+Now, generate TLS using the following command:
 
-```bash 
-export SIGNER_CLIENT_DNS=op-challenger.beta.swc.quarkchain.io 
-./tls-client.sh
+```bash
+# Replace <Client IP address> with the real IP address of the client.
+./tls.sh client <Client IP address>
 ```
+Note that the client IP address should match one of those specified in your server's auth configuration.
 
 You should now have these files in your `tls` folder:
 
 ```bash 
 tls 
-├── tls.crt 
-├── tls.csr 
-└── tls.key 
+├── ca.crt
+├── tls.csr
+└── tls.key
 ```
 Now, you can move the folder to the client where the signer service is being called from.
 
