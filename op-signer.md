@@ -72,7 +72,7 @@ Enter the service account detail page and click the Keys tab.
 
 - Click `Add Key / Create new key`.
 - For Key type, select the JSON key option, then click Create. The file will automatically download to your computer.
-- Place the *.json file you just downloaded in a directory of your choosing for later use.
+- Place the *.json file you just downloaded in a directory of your choice for later use.
 
 
 ## Create a KMS Key
@@ -183,7 +183,7 @@ You can also change other configurations like port and log level in the `.envrc`
 
 ### Configure Auth
 
-Modify the config.yaml file to connect op-signer with your cloud KMS:
+Modify the `config.yaml` file to connect op-signer with your cloud KMS:
 
 - **name**: DNS name of the client connecting to op-signer. In practice, the IP address of the signer client should be used.
 - **key**: key resource name from Cloud KMS obtained from [this step](#get-resource-name-of-the-key).
@@ -218,9 +218,9 @@ In the `op-signer` folder, execute this command:
 
 ```bash
 ./bin/op-signer \
---signer.tls.cert=./tls-server/tls.crt \
---signer.tls.ca=./tls-server/ca.crt \
---signer.tls.key=./tls-server/tls.key 
+--tls.cert=./tls-server/tls.crt \
+--tls.ca=./tls-server/ca.crt \
+--tls.key=./tls-server/tls.key 
 ```
 
 
