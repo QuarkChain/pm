@@ -29,6 +29,7 @@ kurtosis files download my-l2 op-deployer-configs
 
 kurtosis enclave rm -f my-l2
 # local build
+git submodule update --init
 cd kurtosis-devnet && just simple-devnet
 kurtosis enclave rm -f simple-devnet
 ```
