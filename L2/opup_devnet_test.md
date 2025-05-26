@@ -60,7 +60,9 @@ cast codesize 0x4200000000000000000000000000000000000800
 
 ```bash
 export PK1=xxx
-export ADDR1=$(cast wallet address PK1)
+export ADDR1=$(cast wallet address $PK1)
+export PK2=yyy
+export ADDR2=$(cast wallet address $PK2)
 cast call 0x4200000000000000000000000000000000000800 "balanceOf(address)" $ADDR1
 
 # Deposit SGT to another account
@@ -74,7 +76,7 @@ cast call 0x4200000000000000000000000000000000000800 "balanceOf(address)" $ADDR1
 ```bash
 cast balance $ADDR1 # make sure it is zero
 cast send $ADDR1 --private-key $PK1
-cast call 0x4200000000000000000000000000000000000800 "balanceOf(address)" $ADDR1 -r $L2
+cast call 0x4200000000000000000000000000000000000800 "balanceOf(address)" $ADDR1
 ```
 
 - Spend SGT with native gas token
