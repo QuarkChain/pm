@@ -59,9 +59,11 @@ cast codesize 0x4200000000000000000000000000000000000800
 - Deposit SGT for another user
 
 ```bash
-export PK1=xxx
+# An account with zero balance
+export PK1=$(cast wallet private-key "test test test test test test test test test test test junk"  "m/44'/60'/0'/0/31")
 export ADDR1=$(cast wallet address $PK1)
-export PK2=yyy
+# Another account with zero balance
+export PK2=$(cast wallet private-key "test test test test test test test test test test test junk"  "m/44'/60'/0'/0/32")
 export ADDR2=$(cast wallet address $PK2)
 cast call 0x4200000000000000000000000000000000000800 "balanceOf(address)" $ADDR1
 
