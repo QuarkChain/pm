@@ -35,17 +35,10 @@ json2_to_env address.json
 ## Test CGT
 
 1. `cd` to the optimism repo root to make variables like L1_RPC_URL available.
-2. `export GAS_TOKEN_ADDRESS=xxx`
-    1. replace `xxx` with your actual address, which is available during devnet deployment;
-    2. if you forgot, run `cast call $SYSTEM_CONFIG_PROXY_ADDRESS 'gasPayingToken() returns (address addr_, uint8 decimals_)' -r $L1_RPC_URL`
-3. check balance and allowance of CGT on L1:
-    1. `cast call $GAS_TOKEN_ADDRESS "balanceOf(address)" $GS_ADMIN_ADDRESS --rpc-url=$L1_RPC_URL`
-        1. `GS_ADMIN_ADDRESS` is funded with CGT during devnet deployment
-    2. `cast call $GAS_TOKEN_ADDRESS "allowance(address,address)" $GS_ADMIN_ADDRESS $OPTIMISM_PORTAL_PROXY_ADDRESS --rpc-url=$L1_RPC_URL`
-4. approve CGT for portal: `cast send $GAS_TOKEN_ADDRESS "approve(address spender, uint256 amount)" $OPTIMISM_PORTAL_PROXY_ADDRESS 100000000000000000000 --private-key=$GS_ADMIN_PRIVATE_KEY --rpc-url=$L1_RPC_URL`
-4. check L2 balance: `cast balance $GS_ADMIN_ADDRESS`
-5. initiate deposit via bridge: `cast send $OPTIMISM_PORTAL_PROXY_ADDRESS "depositERC20Transaction(address _to,uint256 _mint,uint256 _value,uint64 _gasLimit,bool _isCreation,bytes memory _data)" $GS_ADMIN_ADDRESS 100000000000000000000 100000000000000000000  100000 false 0x --private-key=$GS_ADMIN_PRIVATE_KEY --rpc-url=$L1_RPC_URL`
-6. wait for a few seconds and check if the token is received and reflected on native balance on L2: `cast balance $GS_ADMIN_ADDRESS`
+2. Disable native deposit: `cast send $OPTIMISM_PORTAL_PROXY_ADDRESS "setNativeDeposit(bool)" true --private-key=$GS_ADMIN_PRIVATE_KEY --rpc-url=$L1_RPC_URL`
+3. Set minter for portal: `cast send $OPTIMISM_PORTAL_PROXY_ADDRESS "setMinter(address)" $GS_ADMIN_ADDRESS --private-key=$GS_ADMIN_PRIVATE_KEY --rpc-url=$L1_RPC_URL`
+4. initiate mint via bridge: `cast send $OPTIMISM_PORTAL_PROXY_ADDRESS "mintTransaction(address,uint256)" $GS_ADMIN_ADDRESS 1000000000000000000 --private-key=$GS_ADMIN_PRIVATE_KEY --rpc-url=$L1_RPC_URL`
+5. wait for a few seconds and check if the token is received and reflected on native balance on L2: `cast balance $GS_ADMIN_ADDRESS`
 
 ## Test SGT
 
@@ -116,3 +109,39 @@ cast tx <tx-hash>
 cd da-server
 go run main.go da download --rpc http://localhost:8888 --blob_hash <blob-data-hash>
 ```
+
+## Test 7702
+1. `git clone https://github.com/qizhou/odyssey-examples.git && cd ./odyssey-examples/chapter1`
+2. Fund developer accounts which we can use for the test going forward
+    ```bash
+    # using anvil dev accounts 
+    export ALICE_ADDRESS="0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+    export ALICE_PK="0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+    export BOB_PK="0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"
+    export BOB_ADDRESS="0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
+    cast send $BOB_ADDRESS --value 500000000000000 --private-key=$GS_ADMIN_PRIVATE_KEY
+    cast balance $BOB_ADDRESS 
+    ```
+3. We need to deploy a contract which delegates calls from the user and executes on their behalf. The contract itself is very basic, it will delegate the call and emit an Executed event for debugging purposes:
+    ```bash
+    forge create SimpleDelegateContract --private-key $BOB_PK
+    export SIMPLE_DELEGATE_ADDRESS="<enter-contract-address>"
+    ```
+4. Let's verify that we don't have a smart contract yet associated to Alice's account
+    ```bash
+    $ cast code $ALICE_ADDRESS
+    0x
+    ```
+5. Alice can sign an EIP-7702 authorization using cast wallet sign-auth as follows:
+    ```bash
+    SIGNED_AUTH=$(cast wallet sign-auth $SIMPLE_DELEGATE_ADDRESS --private-key $ALICE_PK)
+    ```
+6. Bob (delegate) relays the transaction on Alice's behalf using his own private key and thereby paying gas fee from his account:
+    ```bash
+    cast send $ALICE_ADDRESS "execute((bytes,address,uint256)[])" "[("0x",$(cast az),0)]" --private-key $BOB_PK --auth $SIGNED_AUTH
+    ```    
+7. Verify that our command was successful, by checking Alice's code
+    ```bash
+    $ cast code $ALICE_ADDRESS
+    0xef0100...
+    ```    
