@@ -36,7 +36,7 @@ json2_to_env address.json
 
 1. `cd` to the optimism repo root to make variables like L1_RPC_URL available.
 2. Disable native deposit: `cast send $OPTIMISM_PORTAL_PROXY_ADDRESS "setNativeDeposit(bool)" true --private-key=$GS_ADMIN_PRIVATE_KEY --rpc-url=$L1_RPC_URL`
-3. Set miner for portal: `cast send $OPTIMISM_PORTAL_PROXY_ADDRESS "setMinter(address)" $GS_ADMIN_ADDRESS --private-key=$GS_ADMIN_PRIVATE_KEY --rpc-url=$L1_RPC_URL`
+3. Set minter for portal: `cast send $OPTIMISM_PORTAL_PROXY_ADDRESS "setMinter(address)" $GS_ADMIN_ADDRESS --private-key=$GS_ADMIN_PRIVATE_KEY --rpc-url=$L1_RPC_URL`
 4. initiate mint via bridge: `cast send $OPTIMISM_PORTAL_PROXY_ADDRESS "mintTransaction(address,uint256)" $GS_ADMIN_ADDRESS 1000000000000000000 --private-key=$GS_ADMIN_PRIVATE_KEY --rpc-url=$L1_RPC_URL`
 5. wait for a few seconds and check if the token is received and reflected on native balance on L2: `cast balance $GS_ADMIN_ADDRESS`
 
