@@ -25,9 +25,9 @@ openssl rand -hex 32 > jwt.txt
 
  export L1_RPC_KIND=basic
 
- export L1_RPC_URL=http://65.108.230.142:8545
+ export L1_RPC_URL=http://88.99.30.186:8545
 
- export L1_BEACON_URL=http://65.108.230.142:3500
+ export L1_BEACON_URL=http://88.99.30.186:3500
 
 mkdir safedb
 # Ensure to replace --p2p.static with the sequencer's address.

@@ -17,7 +17,7 @@ Then invoke the `drop` function on etherscan [here](https://sepolia.etherscan.io
 
 Or simply run this:
 ```bash
-export L1_RPC_URL='http://65.108.230.142:8545'
+export L1_RPC_URL='http://88.99.30.186:8545'
 export PRIVATE_KEY=''# input your own pk
 
 cast send 0x274a6990dE7AaE06452cbEFa266c0C6a568F0D5B 'drop()' --private-key $PRIVATE_KEY -r $L1_RPC_URL
