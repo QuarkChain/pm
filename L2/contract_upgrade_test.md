@@ -57,9 +57,9 @@ l1ContractsLocator = "file:///root/optimism/packages/contracts-bedrock/forge-art
 l2ContractsLocator = "file:///root/optimism/packages/contracts-bedrock/forge-artifacts/"
 
 [superchainRoles]
-proxyAdminOwner = $PROXY_ADMIN_OWNER
-protocolVersionsOwner = $PROXY_ADMIN_OWNER
-guardian = $PROXY_ADMIN_OWNER
+proxyAdminOwner = "$PROXY_ADMIN_OWNER"
+protocolVersionsOwner = "$PROXY_ADMIN_OWNER"
+guardian = "$PROXY_ADMIN_OWNER"
 
 [[chains]]
 id = "0x000000000000000000000000000000000000000000000000000000000153c16e"
@@ -71,13 +71,13 @@ eip1559Denominator = 50
 eip1559Elasticity = 6
 
 [chains.roles]
-l1ProxyAdminOwner = $PROXY_ADMIN_OWNER
-l2ProxyAdminOwner = $PROXY_ADMIN_OWNER
-systemConfigOwner = $PROXY_ADMIN_OWNER
-unsafeBlockSigner = $SEQUENCER
-batcher = $BATCHER
-proposer = $PROPOSER
-challenger = $CHALLENGER
+l1ProxyAdminOwner = "$PROXY_ADMIN_OWNER"
+l2ProxyAdminOwner = "$PROXY_ADMIN_OWNER"
+systemConfigOwner = "$PROXY_ADMIN_OWNER"
+unsafeBlockSigner = "$SEQUENCER"
+batcher = "$BATCHER"
+proposer = "$PROPOSER"
+challenger = "$CHALLENGER"
 ```
 
 #### Apply deployment
@@ -140,12 +140,12 @@ Create a config JSON file:
 
 ```json
 {
-  "prank": $PROXY_ADMIN_OWNER,
-  "opcm": $OPCM_ADDRESS_V3,
+  "prank": "$PROXY_ADMIN_OWNER",
+  "opcm": "$OPCM_ADDRESS_V3",
   "chainConfigs": [
     {
-      "systemConfigProxy": $SYSTEM_CONFIG_PROXY_V2,
-      "proxyAdmin": $PROXY_ADMIN_V2,
+      "systemConfigProxy": "$SYSTEM_CONFIG_PROXY_V2",
+      "proxyAdmin": "$PROXY_ADMIN_V2",
       "absolutePrestate": "0x03725e4fea19be29e31f014c94c85a12be70ad1f17b4f939094a7e9d56ef7bdf"
     }
   ]
