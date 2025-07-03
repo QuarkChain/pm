@@ -63,9 +63,9 @@ guardian = "$PROXY_ADMIN_OWNER"
 
 [[chains]]
 id = "0x000000000000000000000000000000000000000000000000000000000153c16e"
-baseFeeVaultRecipient = $VAULT_RECIPIENT
-l1FeeVaultRecipient = $VAULT_RECIPIENT
-sequencerFeeVaultRecipient = $VAULT_RECIPIENT
+baseFeeVaultRecipient = "$VAULT_RECIPIENT"
+l1FeeVaultRecipient = "$VAULT_RECIPIENT"
+sequencerFeeVaultRecipient = "$VAULT_RECIPIENT"
 eip1559DenominatorCanyon = 250
 eip1559Denominator = 50
 eip1559Elasticity = 6
