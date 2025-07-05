@@ -7,7 +7,7 @@ We want to walk through the OP Stack smart contract upgrade workflow — specifi
 1. **Familiarity with the upgrade workflow**, especially since we're using a customized `OptimismPortal2` contract, which may require additional steps beyond the standard flow.
 2. **Compatibility with Gnosis Safe**, ensuring the upgrade process works seamlessly when executed via a Gnosis Safe wallet.
 
-> **Important:** There is a one-to-one mapping between each OPCM and the target contracts version. You **must** deploy a dedicated OPCM for each version you plan to upgrade to. OPCM and `op-deployer` **do not support** upgrades between custom or non-standard versions.
+> **Important:** Each OPCM corresponds to a specific target contract version. You must deploy a dedicated OPCM for each target version you plan to upgrade to. Note that both OPCM (as part of the contract release package) and op-deployer do not support upgrades between custom or non-standard versions.
 
 ---
 
