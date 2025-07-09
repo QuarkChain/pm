@@ -151,8 +151,8 @@ make
 While in `infra/op-signer`, run the following command to generate TLS:
 
 ```bash
-# Replace <Server DNS> with the real DNS name of the server that the client uses to connect.
-./tls.sh server <Server DNS>
+# Replace op-signer.testnet.quarkchain.io with the real DNS name of the server that the client uses to connect.
+./tls.sh server op-signer.testnet.quarkchain.io
 ```
 
 You will receive several CA and TLS-related files in `tls-server` folder:
@@ -280,7 +280,7 @@ For example, use op-challenger to perform an action against a specific game:
 ./bin/op-challenger move --attack --claim \
 --l1-eth-rpc http://5.9.87.214:8545 \
 --game-address 0xAa0ef55777C8783602d3E0024ea640546b2ee124 \
---signer.endpoint=https://65.109.50.145:8080 \
+--signer.endpoint=https://op-signer.testnet.quarkchain.io:8080 \
 --signer.address=0x74D3b2A1c7cD4Aea7AF3Ce8C08Cf5132ECBA64ED \
 --signer.tls.cert=./tls/tls.crt \
 --signer.tls.ca=./tls/ca.crt \
