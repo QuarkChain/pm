@@ -191,8 +191,9 @@ Modify the `config.yaml` file to connect op-signer with your cloud KMS:
 For example:
 
 ```yml
+# Replace `test.local` with the real DNS name of the client.
 auth:
-- name: challenger.swc.quarkchain.org
+- name: test.local
   key: projects/signing-test-450710/locations/global/keyRings/op-signer/cryptoKeys/op-challenger/cryptoKeyVersions/1
 ```
 
@@ -223,7 +224,6 @@ In the `op-signer` folder, execute this command:
 --tls.key=./tls-server/tls.key 
 ```
 
-
 ## Configure Signer Client
 
 ### Generate Client TLS
@@ -233,8 +233,8 @@ Log on to the server where your op-signer service deployed in [this step](#build
 Now, generate TLS using the following command:
 
 ```bash
-# Replace <Client DNS> with the real DNS name of the client.
-./tls.sh client <Client DNS>
+# Replace `test.local` with the real DNS name of the client.
+./tls.sh client test.local
 ```
 Note that the client DNS should match one of those specified in your server's auth configuration.
 
@@ -246,6 +246,18 @@ tls
 ├── tls.csr
 └── tls.key
 ```
+
+#### Fast Local Test (Optional)
+
+Run the following command to verify the op-signer service is correctly configured (working with client DNS `test.local`):
+```bash
+./bin/op-signer client transaction --endpoint https://localhost:8080 0x02f85d82053980010182753094000000000000000000000000000000000000aaaa0180f838f794000000000000000000000000000000000000aaaae1a00000000000000000000000000000000000000000000000000000000000000000808080
+```
+Expected result:
+```json
+{"type":"0x2","chainId":"0x539","nonce":"0x0","to":"0x000000000000000000000000000000000000aaaa","gas":"0x7530","gasPrice":null,"maxPriorityFeePerGas":"0x1","maxFeePerGas":"0x1","value":"0x1","input":"0x","accessList":[{"address":"0x000000000000000000000000000000000000aaaa","storageKeys":["0x0000000000000000000000000000000000000000000000000000000000000000"]}],"v":"0x1","r":"0x8d9540ce394ec0c270ce9f44a28859a2f58a7adff5c7663fc4888ea0c78ae953","s":"0x1c220902ba8c86fe31fc9ea4be1d1b452fb7e6a9b249b942be5986a5de16bf24","yParity":"0x1","hash":"0x3f0c90e8bc05d77f22b0df71aaad5c6ca87db673944ba6de823c992e8e8ef16e"}
+```
+
 Now, you can move the folder to the client where the signer service is being called from.
 
 ### Set Client Flags
