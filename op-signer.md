@@ -153,7 +153,7 @@ While in `infra/op-signer`, run the following command to generate TLS:
 ```bash
 # Replace <Server DNS> with the real DNS name of the server that the client uses to connect.
 ./tls.sh server <Server DNS>
-```ß
+```
 
 You will receive several CA and TLS-related files in `tls-server` folder:
 
