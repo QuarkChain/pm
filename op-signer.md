@@ -151,9 +151,9 @@ make
 While in `infra/op-signer`, run the following command to generate TLS:
 
 ```bash
-# Replace <Server IP address> with the real IP address of the server that the client uses to connect.
-./tls.sh server <Server IP address>
-```
+# Replace <Server DNS> with the real DNS name of the server that the client uses to connect.
+./tls.sh server <Server DNS>
+```ß
 
 You will receive several CA and TLS-related files in `tls-server` folder:
 
@@ -185,14 +185,14 @@ You can also change other configurations like port and log level in the `.envrc`
 
 Modify the `config.yaml` file to connect op-signer with your cloud KMS:
 
-- **name**: DNS name of the client connecting to op-signer. In practice, the IP address of the signer client should be used.
+- **name**: DNS name of the client connecting to op-signer.
 - **key**: key resource name from Cloud KMS obtained from [this step](#get-resource-name-of-the-key).
 
 For example:
 
 ```yml
 auth:
-- name: 192.168.1.10
+- name: challenger.swc.quarkchain.org
   key: projects/signing-test-450710/locations/global/keyRings/op-signer/cryptoKeys/op-challenger/cryptoKeyVersions/1
 ```
 
@@ -233,10 +233,10 @@ Log on to the server where your op-signer service deployed in [this step](#build
 Now, generate TLS using the following command:
 
 ```bash
-# Replace <Client IP address> with the real IP address of the client.
-./tls.sh client <Client IP address>
+# Replace <Client DNS> with the real DNS name of the client.
+./tls.sh client <Client DNS>
 ```
-Note that the client IP address should match one of those specified in your server's auth configuration.
+Note that the client DNS should match one of those specified in your server's auth configuration.
 
 You should now have these files in your `tls` folder:
 
@@ -266,9 +266,9 @@ For example, use op-challenger to perform an action against a specific game:
 
 ```bash 
 ./bin/op-challenger move --attack --claim \
---l1-eth-rpc http://88.99.30.186:8545 \
+--l1-eth-rpc http://5.9.87.214:8545 \
 --game-address 0xAa0ef55777C8783602d3E0024ea640546b2ee124 \
---signer.endpoint=https://65.108.236.27:8080 \
+--signer.endpoint=https://65.109.50.145:8080 \
 --signer.address=0x74D3b2A1c7cD4Aea7AF3Ce8C08Cf5132ECBA64ED \
 --signer.tls.cert=./tls/tls.crt \
 --signer.tls.ca=./tls/ca.crt \
