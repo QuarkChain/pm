@@ -1,0 +1,26 @@
+{
+    "admin": {
+        "address": "0x91eDD257B4184aC152cce1bbEC29FD93979Ae0db"
+    },
+    "proposer": {
+        "endpoint": "https://op-signer.beta2.testnet.l2.quarkchain.io:8080",
+        "address": "0x34dFb869A870Ff1DC0b1e495BFce871576EBb558",
+        "tlsca": "/root/qkc-bete2-tesetnet/opup/tls-proposer/ca.crt",
+        "tlscert": "/root/qkc-bete2-tesetnet/opup/tls-proposer/tls.crt",
+        "tlskey": "/root/qkc-bete2-tesetnet/opup/tls-proposer/tls.key"
+    },
+    "batcher": {
+        "endpoint": "https://op-signer.beta2.testnet.l2.quarkchain.io:8080",
+        "address": "0x907BFA1AF0f6Def65b67Ce53eAdA8121C7AEf56E",
+        "tlsca": "/root/qkc-bete2-tesetnet/opup/tls-batcher/ca.crt",
+        "tlscert": "/root/qkc-bete2-tesetnet/opup/tls-batcher/tls.crt",
+        "tlskey": "/root/qkc-bete2-tesetnet/opup/tls-batcher/tls.key"
+    },
+    "challenger": {
+        "endpoint": "https://op-signer.beta2.testnet.l2.quarkchain.io:8080",
+        "address": "0x609251a4446354a0B351de4DB0543a2b4CAD464E",
+        "tlsca": "/root/qkc-bete2-tesetnet/opup/tls-challenger/ca.crt",
+        "tlscert": "/root/qkc-bete2-tesetnet/opup/tls-challenger/tls.crt",
+        "tlskey": "/root/qkc-bete2-tesetnet/opup/tls-challenger/tls.key"
+    }
+}
