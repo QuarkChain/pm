@@ -119,12 +119,12 @@ go run main.go da download --rpc http://localhost:8888 --blob_hash <blob-data-ha
     export ALICE_PK="0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
     export BOB_PK="0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"
     export BOB_ADDRESS="0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
-    cast send $BOB_ADDRESS --value 500000000000000 --private-key=$GS_ADMIN_PRIVATE_KEY
+    cast send $BOB_ADDRESS --value 500000000000000 --private-key=$GS_ADMIN_PRIVATE_KEY 
     cast balance $BOB_ADDRESS 
     ```
 3. We need to deploy a contract which delegates calls from the user and executes on their behalf. The contract itself is very basic, it will delegate the call and emit an Executed event for debugging purposes:
     ```bash
-    forge create SimpleDelegateContract --private-key $BOB_PK
+    forge create SimpleDelegateContract --private-key $BOB_PK --broadcast
     export SIMPLE_DELEGATE_ADDRESS="<enter-contract-address>"
     ```
 4. Let's verify that we don't have a smart contract yet associated to Alice's account
