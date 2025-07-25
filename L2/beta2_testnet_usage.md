@@ -6,8 +6,8 @@ Faucet:
 Explorer：https://explorer.beta2.testnet.l2.quarkchain.io or http://65.109.115.36
 RPC: https://rpc.beta2.testnet.l2.quarkchain.io:8545 or http://65.109.115.36:8545 
 Custom Gas Token: 
-Portal: 0xf21f7d321b17d802dfa0abbf263e82a4790d6a95
-System Config: 0xb4d4f90918fa57f73b9c5219af44ca29b6af365a
+Portal: 0x7ae9540cbe4926fc0aefadae71de974d6c58b50e
+System Config: 0x5322e17213cd26d5ddcd4389ed89bca1ec9e791c
 
 BatchInbox Proxy Address: 0x3fe221A447f350551ff208951098517252018007
 BatchInbox ProxyAdmin: 0x5CDA40AE03661ce522DDd7106c57c4Ca33c05A04

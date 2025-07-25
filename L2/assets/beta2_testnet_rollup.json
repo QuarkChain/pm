@@ -1,14 +1,14 @@
 {
   "genesis": {
     "l1": {
-      "hash": "0xf807da0d36094b223caf646ecda9ba1f39ec792be23c560c8aedc813279b553d",
-      "number": 8761175
+      "hash": "0xe5a0e36b1871bce0be14e2e7989a211b9ad143d76418f7c27affabffb7413538",
+      "number": 8838176
     },
     "l2": {
-      "hash": "0x211187f75442165994870a363b71da926d317af4c766b40cbecc810c3131e4ff",
+      "hash": "0x8749ab5e5f99a5fa06d9490eef2e62caf3b88fdfd973cb949e0e1b4039bfb87b",
       "number": 0
     },
-    "l2_time": 1752482244,
+    "l2_time": 1753432896,
     "system_config": {
       "batcherAddr": "0x907bfa1af0f6def65b67ce53eada8121c7aef56e",
       "overhead": "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -33,23 +33,18 @@
   "holocene_time": 0,
   "isthmus_time": 0,
   "batch_inbox_address": "0x3fe221a447f350551ff208951098517252018007",
-  "deposit_contract_address": "0xf21f7d321b17d802dfa0abbf263e82a4790d6a95",
-  "l1_system_config_address": "0xb4d4f90918fa57f73b9c5219af44ca29b6af365a",
-  "protocol_versions_address": "0x1065519a14948c628662f2d39827154b88339962",
+  "deposit_contract_address": "0x7ae9540cbe4926fc0aefadae71de974d6c58b50e",
+  "l1_system_config_address": "0x5322e17213cd26d5ddcd4389ed89bca1ec9e791c",
+  "protocol_versions_address": "0x2368c875271eb2061d732a95a2c211df63051c36",
   "chain_op_config": {
     "eip1559Elasticity": 6,
     "eip1559Denominator": 50,
     "eip1559DenominatorCanyon": 250,
-    "soulGasTokenBlock": 15768000,
     "isSoulBackedByNative": true,
     "l1BaseFeeScalarMultiplier": 100000,
     "l1BlobBaseFeeScalarMultiplier": 10000000
-  },
-  "l2_blob_config": {
-    "l2BlobTime": 1784018244
   },
   "inbox_contract_config": {
     "use_inbox_contract": true
   }
 }
-
