@@ -78,7 +78,9 @@ We will generate the zip file on the deployment machine directly.
         cd ../optimism
         just op-node/op-node
         ```
-> ⚠️ Note: For a mainnet hardfork release, we should first commit the updated `superchain-configs.zip` and `superchain-registry-commit.txt` to the op-geth repository. Afterward, we’ll build the final release binary and validate it thoroughly in our staging environment to ensure everything operates as expected. Once testing is complete and confirmed successful, we can then officially release the final version and deploy to production.        
+> ⚠️ Important Notes: 
+>   - For mainnet deployment, we should dump and compare the results from LoadOPStackGenesis and LoadOPStackRollupConfig to the corresponding JSON outputs. This comparison ensures that no fields have been unintentionally modified, significantly reducing testing effort and helping us quickly validate the integrity of configurations.
+>   - For mainnet hardfork release, we should first commit the updated `superchain-configs.zip` and `superchain-registry-commit.txt` to the op-geth repository. Afterward, we’ll build the final release binary and validate it thoroughly in our staging environment to ensure everything operates as expected. Once testing is complete and confirmed successful, we can then officially release the final version and deploy to production.        
 ## 4. Restart op-node && op-geth
   - Restart op-node
     - Remove `--rollup.config` flag if currently used
