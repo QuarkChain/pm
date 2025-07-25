@@ -1,11 +1,12 @@
 # Basic Info
 
 ```bash
-Entrance: https://bridge.beta2.testnet.l2.quarkchain.io
+Token Migration: https://migration.beta2.testnet.l2.quarkchain.io
+ERC20 Bridge: https://bridge.beta2.testnet.l2.quarkchain.io
 Faucet: 
 Explorer：https://explorer.beta2.testnet.l2.quarkchain.io or http://65.109.115.36
 RPC: https://rpc.beta2.testnet.l2.quarkchain.io:8545 or http://65.109.115.36:8545 
-Custom Gas Token: 
+Custom Gas Token: sep:0xBf0b6e5C39d4afECB824305397729cd0493792E7
 Portal: 0x7ae9540cbe4926fc0aefadae71de974d6c58b50e
 System Config: 0x5322e17213cd26d5ddcd4389ed89bca1ec9e791c
 
@@ -19,3 +20,18 @@ sequencer: 0xf4fCd1c93C8455933360f644269872719BDF7543
 
 Proxy admin owner: 0x91eDD257B4184aC152cce1bbEC29FD93979Ae0db
 ```
+# Get Custom Gas Token On L1
+
+First, ensure you've some sepolia gas, otherwise go [here](https://www.alchemy.com/faucets/ethereum-sepolia) for faucet.
+
+Then invoke the `mint` function on etherscan [here](https://sepolia.etherscan.io/address/0xBf0b6e5C39d4afECB824305397729cd0493792E7#writeContract).
+
+Or simply run this:
+```bash
+export L1_RPC_URL='http://65.108.230.142:8545'
+export PRIVATE_KEY=''# input your own pk
+
+cast send 0xBf0b6e5C39d4afECB824305397729cd0493792E7 'mint()' --private-key $PRIVATE_KEY -r $L1_RPC_URL
+```
+
+After that you can cross the claimed `Custom Gas Token` to L2 via `Token Migration`
