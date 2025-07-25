@@ -62,7 +62,7 @@ We will generate the zip file on the deployment machine directly.
     - Update repository URL in `sync-superchain.sh`
       ```bash
       - https://github.com/ethereum-optimism/superchain-registry.git
-      + https://github.com/quarkchain/superchain-registry.git      
+      + https://github.com/QuarkChain/superchain-registry.git      
       ```
     - Update commit hash in `superchain-registry-commit.txt` to match the latest commit on the devnet branch.
   - Rebuild binaries: 
@@ -78,6 +78,7 @@ We will generate the zip file on the deployment machine directly.
         cd ../optimism
         just op-node/op-node
         ```
+> ⚠️ Note: For a mainnet hardfork release, we should first commit the updated `superchain-configs.zip` and `superchain-registry-commit.txt` to the op-geth repository. Afterward, we’ll build the final release binary and validate it thoroughly in our staging environment to ensure everything operates as expected. Once testing is complete and confirmed successful, we can then officially release the final version and deploy to production.        
 ## 4. Restart op-node && op-geth
   - Restart op-node
     - Remove `--rollup.config` flag if currently used
