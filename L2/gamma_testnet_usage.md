@@ -1,11 +1,11 @@
 # Basic Info
 
 ```bash
-Token Migration: https://migration.beta2.testnet.l2.quarkchain.io
-ERC20 Bridge: https://bridge.beta2.testnet.l2.quarkchain.io
+Token Migration: https://migration.gamma.testnet.l2.quarkchain.io
+ERC20 Bridge: https://bridge.gamma.testnet.l2.quarkchain.io
 Faucet: 
-Explorer：https://explorer.beta2.testnet.l2.quarkchain.io or http://65.109.115.36
-RPC: https://rpc.beta2.testnet.l2.quarkchain.io:8545 or http://65.109.115.36:8545 
+Explorer：https://explorer.gamma.testnet.l2.quarkchain.io or http://65.109.115.36
+RPC: https://rpc.gamma.testnet.l2.quarkchain.io:8545 or http://65.109.115.36:8545 
 Custom Gas Token: sep:0xBf0b6e5C39d4afECB824305397729cd0493792E7
 Portal: 0x7ae9540cbe4926fc0aefadae71de974d6c58b50e
 System Config: 0x5322e17213cd26d5ddcd4389ed89bca1ec9e791c
