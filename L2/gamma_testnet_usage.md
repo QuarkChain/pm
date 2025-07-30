@@ -5,7 +5,7 @@ Token Migration: https://migration.gamma.testnet.l2.quarkchain.io
 ERC20 Bridge: https://bridge.gamma.testnet.l2.quarkchain.io
 Faucet: https://qkc-l2-gamma-faucet.eth.sep.w3link.io
 Explorer：https://explorer.gamma.testnet.l2.quarkchain.io or http://65.109.115.36
-RPC: https://rpc.gamma.testnet.l2.quarkchain.io:8545 or http://65.109.115.36:8545 
+RPC: https://rpc.gamma.testnet.l2.quarkchain.io:8545 or http://65.109.69.90:8545 
 Custom Gas Token: sep:0xBf0b6e5C39d4afECB824305397729cd0493792E7
 Portal: 0x7ae9540cbe4926fc0aefadae71de974d6c58b50e
 System Config: 0x5322e17213cd26d5ddcd4389ed89bca1ec9e791c
