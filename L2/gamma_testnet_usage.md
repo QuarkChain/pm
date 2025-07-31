@@ -18,7 +18,8 @@ op-batcher: 0x907BFA1AF0f6Def65b67Ce53eAdA8121C7AEf56E
 op-challenger: 0x609251a4446354a0B351de4DB0543a2b4CAD464E
 sequencer: 0xf4fCd1c93C8455933360f644269872719BDF7543
 
-Proxy admin owner: 0x91eDD257B4184aC152cce1bbEC29FD93979Ae0db
+Proxy Admin Owner: 0x91eDD257B4184aC152cce1bbEC29FD93979Ae0db
+Dispute Game Grafana: https://grafana.ethstorage.io/d/QKC-L2-Gamma/op-dispute-monitor-gamma 
 ```
 # Get Custom Gas Token On L1
 
