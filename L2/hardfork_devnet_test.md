@@ -65,6 +65,7 @@ We will generate the zip file on the deployment machine directly.
       + https://github.com/QuarkChain/superchain-registry.git      
       ```
     - Update commit hash in `superchain-registry-commit.txt` to match the latest commit on the devnet branch.
+  - Run `sync-superchain.sh` to generate the new `superchain-configs.zip`
   - Rebuild binaries: 
     - For op-geth: 
       ```bash
