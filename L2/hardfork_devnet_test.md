@@ -86,6 +86,7 @@ We will generate the zip file on the deployment machine directly.
   - Restart op-node
     - Remove `--rollup.config` flag if currently used
     - Add the `--network=qkc-sepolia` flag to specify the updated configuration.
+    - Add the `--dac.urls=http://localhost:8888` flag to specify the da server option if you are activating L2 Blob
   - Restart op-geth
     - Add the `--op-network=qkc-sepolia` flag to specify the updated configuration.
 
