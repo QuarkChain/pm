@@ -28,7 +28,7 @@ Perform the following steps to update the superchain registry:
     ```
   - Update configuration files:
       - Modify `./chainList.toml` and `./chainList.json` based on your deployment specifics.
-      - Edit `./superchain/config/sepolia/qkc.toml`
+      - Edit `./superchain/configs/sepolia/qkc.toml`
           - Set `l2_blob_time` and `soul_gas_token_time` accordingly
           - Update values in `genesis.l1`, `genesis.l2` and `genesis.system_config`
           - Ensure all relevant roles and addresses are correctly set.
