@@ -23,8 +23,7 @@ Start the dispute monitor:
 ```bash
 ./bin/op-dispute-mon --l1-eth-rpc $L1_RPC_URL \
   --rollup-rpc $ROLLUP_RPC \
-  --game-factory-address \
-  $GAME_FACTORY_ADDR \
+  --game-factory-address $GAME_FACTORY_ADDR \
   --metrics.enabled \
   --metrics.addr 0.0.0.0 \
   --metrics.port 7300
