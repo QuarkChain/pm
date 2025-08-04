@@ -19,7 +19,7 @@ Deploy the OP Stack according to the instructions provided [here](https://github
     Error: server returned an error response: error code -32000: transaction type not supported
     ```
 ## 2. Updating the Superchain Registry
-Perform the following steps to update the superchain registry:
+Perform the following steps to update the superchain registry. For detailed instructions, refer to the [here](https://github.com/QuarkChain/superchain-registry/blob/main/docs/ops.md) and follow the `Adding a Chain` workflow.
   - Clone and checkout the devnet branch
     ```bash
     git clone https://github.com/QuarkChain/superchain-registry.git
@@ -27,7 +27,7 @@ Perform the following steps to update the superchain registry:
     git checkout devnet
     ```
   - Update configuration files:
-      - Modify `./chainList.toml` and `./chainList.json` based on your deployment specifics.
+      - Modify `./chainList.toml` and `./chainList.json` based on your deployment specifics. (Optional: These two files don’t need to be modified if you’re only testing on the devnet. However, they must be updated when submitting a PR to the upstream repository.)
       - Edit `./superchain/configs/sepolia/qkc.toml`
           - Set `l2_blob_time` and `soul_gas_token_time` accordingly
           - Update values in `genesis.l1`, `genesis.l2` and `genesis.system_config`
@@ -72,7 +72,7 @@ We will generate the zip file on the deployment machine directly.
       make geth
       ```
     - For op-node: 
-      - Copy `superchain-configs.zip` to the appropriate library folder.
+      - Copy `superchain-configs.zip` to the appropriate library folder (typically `~/go/pkg/mod` on Linux). We use this workaround to avoid checking the `superchain-configs.zip` file into the repository, keeping the workflow simpler and the repo cleaner.
       - Temporarily comment out the CheckL1ChainID validation [here](https://github.com/QuarkChain/optimism/blob/06a9487cb7f3b9398de0b9ba27896e7a4ef9d1c0/op-node/rollup/types.go#L195)
       - Compile op-node:
         ```bash
