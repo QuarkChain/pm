@@ -1,5 +1,5 @@
 # Guide to Setting Up Dispute Monitor and Test
-This guide provides instructions for building and launching the QuarkChain Optimism Dispute Monitor。
+This guide provides instructions for building and launching the QuarkChain Optimism Dispute Monitor.
 
 ## 1. Building op-dispute-mon
 Clone the repository and build the op-dispute-mon binary:
@@ -75,6 +75,7 @@ export TLS_CA="/root/op-challenger/optimism/op-challenger/tls-proposer/ca.crt"
 export TLS_CERT="/root/op-challenger/optimism/op-challenger/tls-proposer/tls.crt"
 export TLS_KEY="/root/op-challenger/optimism/op-challenger/tls-proposer/tls.key"
 
+# game type is 1 for permissoned, 0 for permissonless, more detail are here: https://github.com/QuarkChain/optimism/blob/08d81d98237a3077fbc13fcd4b70f2e8d2e14115/op-challenger/game/fault/types/types.go#L29
 ./bin/op-challenger create-game \
   --l1-eth-rpc $L1_ETH_RPC \
   --game-factory-address $GAME_FACTORY_ADDRESS \
