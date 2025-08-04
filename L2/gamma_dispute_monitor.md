@@ -4,7 +4,7 @@ This guide provides instructions for building and launching the QuarkChain Optim
 ## 1. Building op-dispute-mon
 Clone the repository and build the op-dispute-mon binary:
 ```bash
-git clone https://github.com/QuarkChain/optimism.git
+git clone -b gamma_testnet https://github.com/QuarkChain/optimism.git
 cd op-dispute-mon
 just op-dispute-mon
 ```
@@ -34,7 +34,7 @@ Your Dispute Monitor is now running and will monitor the rollup network for disp
 ## 3. Building op-challenger
 Clone the repository and build the op-challenger binary::
 ```bash
-git clone https://github.com/QuarkChain/optimism.git
+git clone -b gamma_testnet https://github.com/QuarkChain/optimism.git
 cd op-challenger
 just op-challenger
 ```
