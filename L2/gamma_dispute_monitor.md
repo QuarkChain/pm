@@ -21,7 +21,13 @@ export GAME_FACTORY_ADDR=0xf2bece34f9b56207db17d490ea4452911da7fb85
 
 Start the dispute monitor:
 ```bash
-./bin/op-dispute-mon --l1-eth-rpc $L1_RPC_URL --rollup-rpc $ROLLUP_RPC --game-factory-address $GAME_FACTORY_ADDR --metrics.enabled --metrics.addr 0.0.0.0 --metrics.port 7300
+./bin/op-dispute-mon --l1-eth-rpc $L1_RPC_URL \
+  --rollup-rpc $ROLLUP_RPC \
+  --game-factory-address \
+  $GAME_FACTORY_ADDR \
+  --metrics.enabled \
+  --metrics.addr 0.0.0.0 \
+  --metrics.port 7300
 ```
 
 Your Dispute Monitor is now running and will monitor the rollup network for disputes. Metrics are exposed on port 7300.
