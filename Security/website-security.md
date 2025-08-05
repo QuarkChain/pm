@@ -27,7 +27,7 @@ function handler(event) {
 
 - Save and deploy the function
 
-<img width="1600" height="355" alt="Image" src="https://github.com/user-attachments/assets/23661b24-4d21-4c19-8918-8d4b2f97ed18" />
+<img width="3330" height="722" alt="Image" src="https://github.com/user-attachments/assets/aed6eb5b-68df-4894-b3e3-fdcebddffd48" />
 
 > Note:
 > - `X-Frame-Options: DENY` blocks all attempts to embed your website in an iframe.
@@ -53,7 +53,7 @@ function handler(event) {
 
 5. Click Save
 
-<img width="1600" height="339" alt="Image" src="https://github.com/user-attachments/assets/fbdaa400-7f11-4451-ba18-c7aea9167168" />
+<img width="3252" height="734" alt="Image" src="https://github.com/user-attachments/assets/672b9bbf-dea9-41c0-9655-e88b89c111fe" />
 
 <br>
 
