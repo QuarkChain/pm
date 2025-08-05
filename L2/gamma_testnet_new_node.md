@@ -55,8 +55,9 @@ mkdir safedb
   --authrpc.vhosts="*" \
   --authrpc.port=8551 \
   --authrpc.jwtsecret=./jwt.txt \
-  --rollup.disabletxpoolgossip=true \
-  --rollup.sequencerhttp=http://65.109.115.36:8545 2>&1 | tee -a geth.log -i
+  --rollup.disabletxpoolgossip \
+  --rollup.sequencerhttp=http://65.109.115.36:8545 \
+  --rollup.enabletxpooladmission 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=consensus-layer)
 Locate the sequencer's peer ID and replace it in the p2p.static option:
@@ -101,8 +102,9 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --authrpc.vhosts="*" \
   --authrpc.port=8551 \
   --authrpc.jwtsecret=./jwt.txt \
-  --rollup.disabletxpoolgossip=true \
+  --rollup.disabletxpoolgossip \
   --rollup.sequencerhttp=http://65.109.69.90:8545 \
+  --rollup.enabletxpooladmission \
   --bootnodes enode://7c9422be3825257ac80f89968e7e6dd3f64608199640ae6cea07b59d2de57642568908974ed4327f092728a64c7bdc04130ebbeaa607b6a1b95d0d25e9c5330b@65.109.69.90:30303 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
@@ -150,8 +152,9 @@ Replace the public node's peer ID in the p2p.static option:
   --authrpc.vhosts="*" \
   --authrpc.port=8551 \
   --authrpc.jwtsecret=./jwt.txt \
-  --rollup.disabletxpoolgossip=true \
+  --rollup.disabletxpoolgossip \
   --rollup.sequencerhttp=http://65.109.69.90:8545 \
+  --rollup.enabletxpooladmission \
   --bootnodes enode://7c9422be3825257ac80f89968e7e6dd3f64608199640ae6cea07b59d2de57642568908974ed4327f092728a64c7bdc04130ebbeaa607b6a1b95d0d25e9c5330b@65.109.69.90:30303 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
