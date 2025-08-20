@@ -43,7 +43,7 @@ mkdir safedb
   --http.corsdomain="*" \
   --http.vhosts="*" \
   --http.addr=0.0.0.0 \
-  --http.api=web3,eth,txpool,net \
+  --http.api=web3,eth,txpool,net,debug \
   --ws \
   --ws.addr=0.0.0.0 \
   --ws.port=8546 \
@@ -57,9 +57,10 @@ mkdir safedb
   --authrpc.jwtsecret=./jwt.txt \
   --rollup.disabletxpoolgossip \
   --rollup.sequencerhttp=http://65.109.115.36:8545 \
-  --rollup.enabletxpooladmission 2>&1 | tee -a geth.log -i
+  --rollup.enabletxpooladmission \
+  --bootnodes enode://2cbfc81623f99fad137d8725e73346044554deda16e0772f82a13f843aaa34dc8a701e9f86e7820e49cf75670c2ae681eb176bfcd7abd2868fa2822728805f0c@65.109.115.36:30303 2>&1 | tee -a geth.log -i
 ```
-### 2. Launch op-node (syncmode=consensus-layer)
+### 2. Launch op-node (syncmode=execution-layer)
 Locate the sequencer's peer ID and replace it in the p2p.static option:
 ```bash
 ./bin/op-node --l2=http://localhost:8551 \
@@ -67,18 +68,20 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --verifier.l1-confs=4 \
   --rollup.config=./gamma_testnet_rollup.json \
   --rpc.port=8547 \
+  --rpc.enable-admin \
   --p2p.static=/ip4/65.109.115.36/tcp/9003/p2p/16Uiu2HAm9u9YE9AxAf444Krnsr1Acg1bgDdx1N9B4oKP1fg2bvSb \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
   --p2p.no-discovery \
   --p2p.sync.onlyreqtostatic\
-  --rpc.enable-admin \
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
   --l1.beacon=$L1_BEACON_URL \
   --l1.beacon-archiver=http://65.108.236.27:9645 \
-  --safedb.path=safedb | tee -a node.log -i
+  --l1.cache-size=0 \
+  --safedb.path=safedb \
+  --syncmode=execution-layer | tee -a node.log -i
 ```
 
 ## Launch a Snap Sync Node
@@ -115,17 +118,18 @@ Replace the public node's peer ID in the p2p.static option:
   --verifier.l1-confs=4 \
   --rollup.config=./gamma_testnet_rollup.json \
   --rpc.port=8547 \
+  --rpc.enable-admin \
   --p2p.static=/ip4/65.109.69.90/tcp/9003/p2p/16Uiu2HAmLiwieHqxRjjvPJtn5hSowjnkwRPExZQyNJgUEn8ZjBDj \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
   --p2p.no-discovery \
   --p2p.sync.onlyreqtostatic \
-  --rpc.enable-admin \
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
   --l1.beacon=$L1_BEACON_URL \
   --l1.beacon-archiver=http://65.108.236.27:9645 \
+  --l1.cache-size=0 \
   --safedb.path=safedb \
   --syncmode=execution-layer | tee -a node.log -i
 ```
@@ -165,17 +169,18 @@ Replace the public node's peer ID in the p2p.static option:
   --verifier.l1-confs=4 \
   --rollup.config=./gamma_testnet_rollup.json \
   --rpc.port=8547 \
+  --rpc.enable-admin \
   --p2p.static=/ip4/65.109.69.90/tcp/9003/p2p/16Uiu2HAmLiwieHqxRjjvPJtn5hSowjnkwRPExZQyNJgUEn8ZjBDj \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
   --p2p.no-discovery \
   --p2p.sync.onlyreqtostatic \
-  --rpc.enable-admin \
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
   --l1.beacon=$L1_BEACON_URL \
   --l1.beacon-archiver=http://65.108.236.27:9645 \
+  --l1.cache-size=0 \
   --safedb.path=safedb \
   --syncmode=execution-layer | tee -a node.log -i
 ```
