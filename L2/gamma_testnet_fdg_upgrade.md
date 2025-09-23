@@ -68,4 +68,4 @@ bin/op-challenger --l1-eth-rpc $L1_RPC_URL --l1-beacon $L1_BEACON_URL \
     --game-factory-address $DISPUTE_GAME_FACTORY_PROXY_ADDRESS --trace-type cannon --trace-type permissioned  2>&1 | tee -a challenger.log -i
 
 ```
-9. Make sure that `make verify-beta-testnet` under op-program passes.
+9. Make sure that `make verify-gamma-testnet` under op-program passes.
