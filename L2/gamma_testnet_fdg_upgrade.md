@@ -1,19 +1,19 @@
 1. Upgrade ASR：
     ```bash
-    forge script --sig 'run(address,address,address,address,address,uint32,bytes32,uint256)' \
+    cast calldata 'run(address,address,address,address,address,uint32,bytes32,uint256)' \
         scripts/deploy/UpgradeAnchorStateRegistry.s.sol:UpgradeAnchorStateRegistry \
         $DISPUTE_GAME_FACTORY_PROXY_ADDRESS $OP_PROXY_ADMIN_ADDRESS \
         $ANCHOR_STATE_REGISTRY_PROXY_ADDRESS $SUPERCHAIN_CONFIG_PROXY_ADDRESS \
         0x0000000000000000000000000000000000000000 \
-        0 0xa892c858b32ddb0d5c7c5a53690a28c3163a4ee21c06f7b6000c3db6a05db108 0 \
-        --rpc-url $L1_RPC_URL --private-key $GS_ADMIN_PRIVATE_KEY --broadcast
+        0 0xa892c858b32ddb0d5c7c5a53690a28c3163a4ee21c06f7b6000c3db6a05db108 0
     ```
     1.  fetch genesis output root：`0xa892c858b32ddb0d5c7c5a53690a28c3163a4ee21c06f7b6000c3db6a05db108`
         ```bash
         $ curl -X POST -H "Content-Type: application/json" --data  \
         '{"jsonrpc":"2.0","method":"optimism_outputAtBlock","params":["0x0"],"id":1}' \
         http://65.109.69.90:8547
-        ```  
+        ```
+    2. Run the above calldata with Safe.
 2. Run `make reproducible-prestate` to get correct absolute prestate(MIPS64)：`0x037954296697a98e3a22764cdbfc0820e45219eed5dbf6795160f060b19031bc`
 3. Attributes from the permissioned FDG can be queried like below：
 ```bash
