@@ -9,7 +9,6 @@
             --rpc-url $L1_RPC_URL
     popd
     cast calldata 'run(address,address,address,address,address,uint32,bytes32,uint256)' \
-        scripts/deploy/UpgradeAnchorStateRegistry.s.sol:UpgradeAnchorStateRegistry \
         $DISPUTE_GAME_FACTORY_PROXY_ADDRESS $OP_PROXY_ADMIN_ADDRESS \
         $ANCHOR_STATE_REGISTRY_PROXY_ADDRESS $SUPERCHAIN_CONFIG_PROXY_ADDRESS \
         0x0000000000000000000000000000000000000000 \
