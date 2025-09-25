@@ -1,11 +1,20 @@
+0. Prepare a pre-funded `$prefunded_pk` to be used for deploying contracts below.
 1. Upgrade ASR：
     ```bash
+    pushd optimism/packages/contracts-bedrock
+    # deploy UpgradeAnchorStateRegistry contract
+    forge create scripts/deploy/UpgradeAnchorStateRegistry.s.sol:UpgradeAnchorStateRegistry \
+            --broadcast \
+            --private-key $prefunded_pk \
+            --rpc-url $L1_RPC_URL
+    popd
     cast calldata 'run(address,address,address,address,address,uint32,bytes32,uint256)' \
         scripts/deploy/UpgradeAnchorStateRegistry.s.sol:UpgradeAnchorStateRegistry \
         $DISPUTE_GAME_FACTORY_PROXY_ADDRESS $OP_PROXY_ADMIN_ADDRESS \
         $ANCHOR_STATE_REGISTRY_PROXY_ADDRESS $SUPERCHAIN_CONFIG_PROXY_ADDRESS \
         0x0000000000000000000000000000000000000000 \
         0 0xa892c858b32ddb0d5c7c5a53690a28c3163a4ee21c06f7b6000c3db6a05db108 0
+    Delegate call the UpgradeAnchorStateRegistry contract with above calldata from Safe
     ```
     1.  fetch genesis output root：`0xa892c858b32ddb0d5c7c5a53690a28c3163a4ee21c06f7b6000c3db6a05db108`
         ```bash
@@ -13,7 +22,6 @@
         '{"jsonrpc":"2.0","method":"optimism_outputAtBlock","params":["0x0"],"id":1}' \
         http://65.109.69.90:8547
         ```
-    2. Run the above calldata with Safe.
 2. Run `make reproducible-prestate` to get correct absolute prestate(MIPS64)：`0x037954296697a98e3a22764cdbfc0820e45219eed5dbf6795160f060b19031bc`
 3. Attributes from the permissioned FDG can be queried like below：
 ```bash
@@ -32,22 +40,34 @@
 ```
 4. Run the command below to deploy a permission-less FDG with correct absolute prestate：
 ```bash
-op-deployer/bin/op-deployer bootstrap disputegame --l1-rpc-url $L1_RPC_URL --private-key $GS_ADMIN_PRIVATE_KEY \
-    --artifacts-locator "file:///root/xu/beta_testnet/optimism/packages/contracts-bedrock/forge-artifacts/" \
-    --vm 0xF027F4A985560fb13324e943edf55ad6F1d15Dc1 --game-kind FaultDisputeGame --game-type 0 \
-    --absolute-prestate 0x037954296697a98e3a22764cdbfc0820e45219eed5dbf6795160f060b19031bc \
-    --max-game-depth 73 --split-depth 30 --clock-extension 10800 --max-clock-duration 302400 \
-    --delayed-weth-proxy $DELAYED_WETHPERMISSIONED_GAME_PROXY_ADDRESS \
-    --anchor-state-registry-proxy $ANCHOR_STATE_REGISTRY_PROXY_ADDRESS --l2-chain-id 110011 
+pushd optimism/packages/contracts-bedrock
+forge create src/dispute/FaultDisputeGame.sol:FaultDisputeGame \
+            --broadcast \
+            --private-key $prefunded_pk \
+            --rpc-url $L1_RPC_URL \
+            --constructor-args \
+            0 \ # gameType
+            0x037954296697a98e3a22764cdbfc0820e45219eed5dbf6795160f060b19031bc \ # absolutePrestate
+            73 \ # maxGameDepth
+            30 \ # splitDepth
+            10800 \ # clockExtension 
+            302400 \ # maxClockDuration
+            0xF027F4A985560fb13324e943edf55ad6F1d15Dc1 \ #vm
+            0x9f809b4f1eb8b555c54f2387e9b1e3b1cc148010 \ # re-using delayedWETH for Permissioned FDG as delayedWETH for Permissionless FDG
+            0x2c4bb5e294c883758601f536e1511f096938f038 \ # anchorStateRegistry
+            110011 # l2ChainId
+popd
 (Note the address of the deployed contract as DisputeGameImpl)
 ```
-5. Run the command below to update the above FDG to DisputeGameFactory：
+5. Run the steps below to update the above FDG to DisputeGameFactory：
 ```bash
-cast send $DISPUTE_GAME_FACTORY_PROXY_ADDRESS "setImplementation(uint32,address)" 0 <DisputeGameImpl> -r $L1_RPC_URL --private-key $GS_ADMIN_PRIVATE_KEY
+cast calldata "setImplementation(uint32,address)" 0 <DisputeGameImpl>
+Call $DISPUTE_GAME_FACTORY_PROXY_ADDRESS with above calldata from Safe.
 ```
 6. Run the command below to set portal's `respectedGameType` to permission-less FDG:
 ```bash
-cast send $OPTIMISM_PORTAL_PROXY_ADDRESS "setRespectedGameType(uint32)" 0 -r $L1_RPC_URL --private-key $GS_ADMIN_PRIVATE_KEY
+cast calldata "setRespectedGameType(uint32)" 0
+Call $DISPUTE_GAME_FACTORY_PROXY_ADDRESS with above calldata from Safe.
 ```
 7. Set the game-type of the op-proposer to permission-less FDG：
 ```bash
