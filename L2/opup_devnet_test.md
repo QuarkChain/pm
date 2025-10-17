@@ -4,7 +4,7 @@ This document lists the testing steps for the devnet deployed by [opup](https://
 
 The devnet is prepared by the two steps:
 
-1. Run `just simple-devnet` in the `kurtosis-devnet` directory of the `optimism` repo.
+1. Run `kurtosis run --enclave my-l1 github.com/ethpandaops/ethereum-package@a43368eb3085a20f5950de0c7d11dc4bece37348` with kurtosis `1.11.1`.
 2. Run `LOCAL_L1=1 just up --es` in the root directory of opup and follow the interactive instructions.
 
 # Prepare L1 contract address
@@ -15,18 +15,10 @@ After deployment, run the commands below in the root directory of opup to prepar
 just l1 > address.json
 function json2_to_env() {
   for key0 in $( jq -r 'to_entries|map("\(.key)")|.[]' $1 ); do
-    echo $key0;
-    for key in $( jq -r ".$key0|"'to_entries|map("\(.key)")|.[]' $1 ); do
-    skey=$(echo $key | sed -r 's/([a-z0-9])([A-Z])/\1_\L\2/g' | sed -e 's/\(.*\)/\U\1/')
-    if [[ "$skey" == "PROXY_ADMIN_ADDRESS" && $key0 == "superchainDeployment" ]]; then
-      skey="SUPER_PROXY_ADMIN_ADDRESS"
-    elif [[ "$skey" == "PROXY_ADMIN_ADDRESS" && $key0 == "opChainDeployment" ]]; then
-      skey="OP_PROXY_ADMIN_ADDRESS"
-    fi
-    value=$(jq -r \.$key0\.$key $1)
+    value=$(jq -r \.$key0 $1)
+    skey=$(echo $key0 | sed -r 's/([a-z0-9])([A-Z])/\1_\L\2/g' | sed -e 's/\(.*\)/\U\1/')
     echo $skey=$value
     export $skey=$value
-    done
   done
 }
 json2_to_env address.json
