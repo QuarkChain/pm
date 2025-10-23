@@ -4,7 +4,7 @@ This document lists the testing steps for the devnet deployed by [opup](https://
 
 The devnet is prepared by the two steps:
 
-1. Run `just simple-devnet` in the `kurtosis-devnet` directory of the `optimism` repo.
+1. Run `kurtosis run --enclave my-l1 github.com/ethpandaops/ethereum-package@a43368eb3085a20f5950de0c7d11dc4bece37348` with kurtosis `1.11.1`.
 2. Run `LOCAL_L1=1 just up --es` in the root directory of opup and follow the interactive instructions.
 
 # Prepare L1 contract address
@@ -15,18 +15,10 @@ After deployment, run the commands below in the root directory of opup to prepar
 just l1 > address.json
 function json2_to_env() {
   for key0 in $( jq -r 'to_entries|map("\(.key)")|.[]' $1 ); do
-    echo $key0;
-    for key in $( jq -r ".$key0|"'to_entries|map("\(.key)")|.[]' $1 ); do
-    skey=$(echo $key | sed -r 's/([a-z0-9])([A-Z])/\1_\L\2/g' | sed -e 's/\(.*\)/\U\1/')
-    if [[ "$skey" == "PROXY_ADMIN_ADDRESS" && $key0 == "superchainDeployment" ]]; then
-      skey="SUPER_PROXY_ADMIN_ADDRESS"
-    elif [[ "$skey" == "PROXY_ADMIN_ADDRESS" && $key0 == "opChainDeployment" ]]; then
-      skey="OP_PROXY_ADMIN_ADDRESS"
-    fi
-    value=$(jq -r \.$key0\.$key $1)
+    value=$(jq -r \.$key0 $1)
+    skey=$(echo $key0 | sed -r 's/([a-z0-9])([A-Z])/\1_\L\2/g' | sed -e 's/\(.*\)/\U\1/')
     echo $skey=$value
     export $skey=$value
-    done
   done
 }
 json2_to_env address.json
@@ -35,9 +27,9 @@ json2_to_env address.json
 ## Test CGT
 
 1. `cd` to the optimism repo root to make variables like L1_RPC_URL available.
-2. Disable native deposit: `cast send $OPTIMISM_PORTAL_PROXY_ADDRESS "setNativeDeposit(bool)" true --private-key=$GS_ADMIN_PRIVATE_KEY --rpc-url=$L1_RPC_URL`
-3. Set minter for portal: `cast send $OPTIMISM_PORTAL_PROXY_ADDRESS "setMinter(address)" $GS_ADMIN_ADDRESS --private-key=$GS_ADMIN_PRIVATE_KEY --rpc-url=$L1_RPC_URL`
-4. initiate mint via bridge: `cast send $OPTIMISM_PORTAL_PROXY_ADDRESS "mintTransaction(address,uint256)" $GS_ADMIN_ADDRESS 1000000000000000000 --private-key=$GS_ADMIN_PRIVATE_KEY --rpc-url=$L1_RPC_URL`
+2. Disable native deposit: `cast send $OPTIMISM_PORTAL_PROXY "setNativeDeposit(bool)" true --private-key=$GS_ADMIN_PRIVATE_KEY --rpc-url=$L1_RPC_URL`
+3. Set minter for portal: `cast send $OPTIMISM_PORTAL_PROXY "setMinter(address)" $GS_ADMIN_ADDRESS --private-key=$GS_ADMIN_PRIVATE_KEY --rpc-url=$L1_RPC_URL`
+4. initiate mint via bridge: `cast send $OPTIMISM_PORTAL_PROXY "mintTransaction(address,uint256)" $GS_ADMIN_ADDRESS 100000000000000000000 --private-key=$GS_ADMIN_PRIVATE_KEY --rpc-url=$L1_RPC_URL`
 5. wait for a few seconds and check if the token is received and reflected on native balance on L2: `cast balance $GS_ADMIN_ADDRESS`
 
 ## Test SGT
@@ -122,7 +114,7 @@ go run main.go da download --rpc http://localhost:8888 --blob_hash <blob-data-ha
     cast send $BOB_ADDRESS --value 500000000000000 --private-key=$GS_ADMIN_PRIVATE_KEY 
     cast balance $BOB_ADDRESS 
     ```
-3. We need to deploy a contract which delegates calls from the user and executes on their behalf. The contract itself is very basic, it will delegate the call and emit an Executed event for debugging purposes:
+3. We need to deploy a contract which delegates calls from the user and executes on their behalf. The contract itself is very basic, it will delegate the call and emit an Executed event for debugging purposes (Note that you may need to set `eof = false` in the foundry.toml file):
     ```bash
     forge create SimpleDelegateContract --private-key $BOB_PK --broadcast
     export SIMPLE_DELEGATE_ADDRESS="<enter-contract-address>"
