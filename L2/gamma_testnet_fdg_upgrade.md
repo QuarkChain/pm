@@ -44,17 +44,7 @@ forge create src/dispute/FaultDisputeGame.sol:FaultDisputeGame \
             --broadcast \
             --private-key $prefunded_pk \
             --rpc-url $L1_RPC_URL \
-            --constructor-args \
-            0 \ # gameType
-            0x031561ec3552bc669bacc5467cc87f51268e764508baa2d3735b5526a1c4f94e \ # absolutePrestate
-            73 \ # maxGameDepth
-            30 \ # splitDepth
-            10800 \ # clockExtension 
-            302400 \ # maxClockDuration
-            0xF027F4A985560fb13324e943edf55ad6F1d15Dc1 \ #vm
-            0x9f809b4f1eb8b555c54f2387e9b1e3b1cc148010 \ # re-using delayedWETH for Permissioned FDG as delayedWETH for Permissionless FDG
-            0x2c4bb5e294c883758601f536e1511f096938f038 \ # anchorStateRegistry
-            110011 # l2ChainId
+            --constructor-args '(0,0x031561ec3552bc669bacc5467cc87f51268e764508baa2d3735b5526a1c4f94e,73,30,10800,302400,0xF027F4A985560fb13324e943edf55ad6F1d15Dc1,0x9f809b4f1eb8b555c54f2387e9b1e3b1cc148010,0x2c4bb5e294c883758601f536e1511f096938f038,110011)'
 popd
 (Note the address of the deployed contract as DisputeGameImpl)
 ```
@@ -68,19 +58,14 @@ Call $DISPUTE_GAME_FACTORY_PROXY_ADDRESS with above calldata from Safe.
 cast calldata "setInitBond(uint32,uint256)" 0 80000000000000000 # the same as OP mainnet
 Call $DISPUTE_GAME_FACTORY_PROXY_ADDRESS with above calldata from Safe.
 ```
-7. Run the command below to set ASR's `respectedGameType` to permission-less FDG:
-```bash
-cast calldata "setRespectedGameType(uint32)" 0
-Call $ANCHOR_STATE_REGISTRY_PROXY_ADDRESS with above calldata from Safe.
-```
-8. Set the game-type of the op-proposer to permission-less FDG：
+7. Set the game-type of the op-proposer to permission-less FDG：
 ```bash
  ./bin/op-proposer --poll-interval=12s --rpc.port=8560 --rollup-rpc=http://localhost:8547 \
                               --game-factory-address=$DISPUTE_GAME_FACTORY_PROXY_ADDRESS \
                               --proposal-interval 12h --game-type 0 \
                               --private-key=$GS_PROPOSER_PRIVATE_KEY --l1-eth-rpc=$L1_RPC_URL 2>&1 | tee -a proposer.log -i
 ```
-9. Start `op-challenger`:
+8. Start `op-challenger`:
 ```bash
 cd op-challenger
 mkdir datadir
@@ -92,4 +77,4 @@ bin/op-challenger --l1-eth-rpc $L1_RPC_URL --l1-beacon $L1_BEACON_URL \
     --game-factory-address $DISPUTE_GAME_FACTORY_PROXY_ADDRESS --trace-type cannon --trace-type permissioned  2>&1 | tee -a challenger.log -i
 
 ```
-10. Make sure that `make verify-gamma-testnet` under op-program passes.
+9. Make sure that `make verify-gamma-testnet` under op-program passes.
