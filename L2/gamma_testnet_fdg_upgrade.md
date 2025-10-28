@@ -21,7 +21,7 @@
         '{"jsonrpc":"2.0","method":"optimism_outputAtBlock","params":["0x0"],"id":1}' \
         http://65.109.69.90:8547
         ```
-2. Run `make reproducible-prestate` to get correct absolute prestate(MIPS64)：`0x037954296697a98e3a22764cdbfc0820e45219eed5dbf6795160f060b19031bc`
+2. Run `make reproducible-prestate` to get correct absolute prestate(MIPS64)：`0x031561ec3552bc669bacc5467cc87f51268e764508baa2d3735b5526a1c4f94e`
 3. Attributes from the permissioned FDG can be queried like below：
 ```bash
 # cast call $DISPUTE_GAME_FACTORY_PROXY_ADDRESS 'gameImpls(uint32)(address)' 1 -r $L1_RPC_URL
@@ -63,19 +63,24 @@ popd
 cast calldata "setImplementation(uint32,address)" 0 <DisputeGameImpl>
 Call $DISPUTE_GAME_FACTORY_PROXY_ADDRESS with above calldata from Safe.
 ```
-6. Run the command below to set portal's `respectedGameType` to permission-less FDG:
+6. Run the steps below to set the initial bond to DisputeGameFactory：
 ```bash
-cast calldata "setRespectedGameType(uint32)" 0
+cast calldata "setInitBond(uint32,uint256)" 0 80000000000000000 # the same as OP mainnet
 Call $DISPUTE_GAME_FACTORY_PROXY_ADDRESS with above calldata from Safe.
 ```
-7. Set the game-type of the op-proposer to permission-less FDG：
+7. Run the command below to set ASR's `respectedGameType` to permission-less FDG:
+```bash
+cast calldata "setRespectedGameType(uint32)" 0
+Call $ANCHOR_STATE_REGISTRY_PROXY_ADDRESS with above calldata from Safe.
+```
+8. Set the game-type of the op-proposer to permission-less FDG：
 ```bash
  ./bin/op-proposer --poll-interval=12s --rpc.port=8560 --rollup-rpc=http://localhost:8547 \
                               --game-factory-address=$DISPUTE_GAME_FACTORY_PROXY_ADDRESS \
                               --proposal-interval 12h --game-type 0 \
                               --private-key=$GS_PROPOSER_PRIVATE_KEY --l1-eth-rpc=$L1_RPC_URL 2>&1 | tee -a proposer.log -i
 ```
-8. Start `op-challenger`:
+9. Start `op-challenger`:
 ```bash
 cd op-challenger
 mkdir datadir
@@ -87,4 +92,4 @@ bin/op-challenger --l1-eth-rpc $L1_RPC_URL --l1-beacon $L1_BEACON_URL \
     --game-factory-address $DISPUTE_GAME_FACTORY_PROXY_ADDRESS --trace-type cannon --trace-type permissioned  2>&1 | tee -a challenger.log -i
 
 ```
-9. Make sure that `make verify-gamma-testnet` under op-program passes.
+10. Make sure that `make verify-gamma-testnet` under op-program passes.
