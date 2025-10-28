@@ -46,7 +46,7 @@ forge create src/dispute/FaultDisputeGame.sol:FaultDisputeGame \
             --rpc-url $L1_RPC_URL \
             --constructor-args \
             0 \ # gameType
-            0x037954296697a98e3a22764cdbfc0820e45219eed5dbf6795160f060b19031bc \ # absolutePrestate
+            0x031561ec3552bc669bacc5467cc87f51268e764508baa2d3735b5526a1c4f94e \ # absolutePrestate
             73 \ # maxGameDepth
             30 \ # splitDepth
             10800 \ # clockExtension 
