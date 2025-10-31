@@ -28,9 +28,18 @@ Mainnet admint wallets
  - Fund deployer with ETH
 
  ## 5. Deploy inbox contract with EthStorage enabled (https://github.com/ethstorage/es-op-batchinbox/pull/1)
-
+```bash
+# deployment:
+# 1. Filled the .env
+# 2. Deploy
+./deploy.s.sh deploy
+# 3. Make sure all three contracts are verifed
+# 4. Record addresses proxy and proxyAdmin
+# 5. Set ethstorage contract
+# 6. Deposit 0.1 ETH for storage fee
+```
  ## 6. Prepare parameters:
-Testnet:
+  ### Testnet:
   - Chain ID: 110011
   - soulGasTokenBlock: nil
   - l2GenesisBlobTimeOffset: nil
@@ -41,7 +50,7 @@ Testnet:
     - L1BlobBaseFeeScalar: 114098
   - SuperChainConfig [address](https://docs.optimism.io/reference/addresses): 0xC2Be75506d5724086DEB7245bd260Cc9753911Be
     - Submission:
-      - MaxChannelDuration for batcher: 
+      - MaxChannelDuration for batcher: 6h
       - OutputRootProposalInterval for proposer: 12h
 
 ## 7. Run op-up
@@ -66,7 +75,7 @@ Testnet:
 ## 13. op-challenger / op-monitor / grafana
 
 ## 14. Chain monitor
-
+  balance of batacher / proposer / challenger / batchInbox for batcher
 ## 15. Tests
   - proposer / batcher / challenger can submit a tx successfully
   - L1 cost shown on the explorer
