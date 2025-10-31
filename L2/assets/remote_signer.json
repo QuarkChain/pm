@@ -1,6 +1,9 @@
 {
-    "admin": {
+    "l1admin": {
         "address": "0x91eDD257B4184aC152cce1bbEC29FD93979Ae0db"
+    },
+    "l2admin": {
+        "address": "0x187712a3e229498E9E42888761Ab9B92bceB46c7"
     },
     "proposer": {
         "endpoint": "https://op-signer.beta2.testnet.l2.quarkchain.io:8080",
