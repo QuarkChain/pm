@@ -38,6 +38,12 @@ Mainnet admint wallets
 # 5. Set ethstorage contract
 # 6. Deposit 0.1 ETH for storage fee
 ```
+ ### Testnet:
+  - batchInbox proxy: 0xf62e8574B92dc8764c5Ad957b5B0311595f5A3f9
+  - batchInbox impl: 0x900e510791F59705e86E9D6bc8be05f7679d8A3e
+  - batchInbox proxyAdmin: 0xc2bf5eF8F82eD93f166B49CcF29D45699236Af03
+
+
  ## 6. Prepare parameters:
   ### Testnet:
   - Chain ID: 110011
@@ -57,10 +63,37 @@ Mainnet admint wallets
 `REMOTE_SIGNER=1 just up --es`
 
 ### 7.1 .envrc
+#### Testnet:
+ - L1_RPC_URL: http://65.108.230.142:8545
+ - L1_RPC_KIND: standard
+ - L1_BEACON_URL: http://65.108.230.142:3500
+ - L1_BEACON_ARCHIVER_URL: https://archive.testnet.ethstorage.io:9635 
+ - L1_CHAIN_ID: 11155111
+ - L2_CHAIN_ID: 110011
 
-### 7.2 intent.toml
+### 7.2 contract and op-deployer branch
+ - contract: merge_op_contracts_v4.1.0
+ - op-deployer: merge_op-deployer_v0.4.5
 
-### 7.3 Double check private RPC
+### 7.3 intent.toml
+#### Testnet:
+ - superchainConfigProxy: 0xC2Be75506d5724086DEB7245bd260Cc9753911Be
+ - l1BaseFeeScalarMultiplier: 100000
+ - L1BlobBaseFeeScalarMultiplier: 10000000
+ - Delete `soulGasTokenTimeOffset = "0x0"`
+ - Delete `l2GenesisBlobTimeOffset = "0x0"`
+ - batchInboxAddress: 0xf62e8574B92dc8764c5Ad957b5B0311595f5A3f9
+
+### 7.4 MaxChannelDuration && OutputRootProposalInterval
+ - MaxChannelDuration: 1800 (1800 * 12 / 3600 = 6)
+ - OutputRootProposalInterval: 12h
+
+### 7.5 Verify
+ - Verify all the binary are launched successfully
+ - Verify that we use the right superchainConfigProxy
+ - Verify code for L1 + L2 contracts
+
+### 7.6 Double check private RPC
 
 ## 9. Set L1BaseFeeScalar/L1BlobBaseFeeScalar using proxyAdminOwner
 
