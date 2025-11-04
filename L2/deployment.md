@@ -77,7 +77,6 @@ Mainnet admint wallets
 
 ### 7.3 intent.toml
 #### Testnet:
- - superchainConfigProxy: 0xC2Be75506d5724086DEB7245bd260Cc9753911Be
  - l1BaseFeeScalarMultiplier: 100000
  - L1BlobBaseFeeScalarMultiplier: 10000000
  - Delete `soulGasTokenTimeOffset = "0x0"`
@@ -92,24 +91,55 @@ Mainnet admint wallets
  - Verify all the binary are launched successfully
  - Verify that we use the right superchainConfigProxy
  - Verify code for L1 + L2 contracts
+ - Verify the batcher cost for 6hrs submission
+   - delta submission: https://sepolia.etherscan.io/tx/0x415809eea9f4cf5d38da5e4064b53c36137be6c7f6f3750cec836cc0eec77751
+   - hashkey: https://etherscan.io/tx/0xec79b9ad6594e388829a3063fa8bce371a8b341928f55a939aa72e52be0401ca
+   - delta propose: https://sepolia.etherscan.io/tx/0x8e18a93466b7ca702cb09fb3b754318502f5c82d2a7471d900cdb8677ae20daf
+   - hashkey propose: https://etherscan.io/tx/0x4b3731f755d4a2a61f8db93755b83767f999931592cb6c33e4c294fd762532a6
+   - hashkey resolve: https://etherscan.io/address/0x82bdac18f0fbaed34d6a644e9713530259885426
 
 ### 7.6 Double check private RPC
 
+## 8. Set new superchainConfigProxy
+```bash
+# 1. deploy StorageSetter
+forge create src/universal/StorageSetter.sol:StorageSetter --broadcast --private-key $PRIVATE_KEY --rpc-url $RPC_URL
+
+# 2. prepare calldata for upgradeAndCall
+cast calldata "setBytes32(bytes32, bytes32)" 0x0000000000000000000000000000000000000000000000000000000000000000 0x0000000000000000000000000000000000000000000000000000000000000000
+
+0x4e91db0800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+
+# 3. call upgradeAndCall
+upgradeAndCall(opChainProxyAdmin, systemConfigProxy, storageSetter, calldata);
+
+# 4. prepare calldata for upgradeAndCall
+cast calldata "upgrade(uint256, address)" $L2_CHAIN_ID $SuperchainConfigProxy
+
+# 5. call upgradeAndCall
+upgradeAndCall(opChainProxyAdmin, systemConfigProxy, systemConfigImpl, calldata);
+
+# 6. check if the SuperchainConfigProxy was changed
+```
+
 ## 9. Set L1BaseFeeScalar/L1BlobBaseFeeScalar using proxyAdminOwner
 
-## 9 Submit the genesis / rollup config / L1 contract address to the pm repo
+## 10. Initial Test
+Refer to this [doc](https://github.com/QuarkChain/pm/blob/main/L2/opup_devnet_test.md)
 
-## 10. Lauch Public RPC Node
+## 11 Submit the genesis / rollup config / L1 contract address to the pm repo
 
-## 11. Explorer / Domain / Faucet
+## 12. Lauch Public RPC Node
 
-## 12. Custom Bridge / Roll Bridge
+## 13. Explorer / Domain / Faucet
 
-## 13. op-challenger / op-monitor / grafana
+## 14. Custom Bridge / Roll Bridge
 
-## 14. Chain monitor
+## 15. op-challenger / op-monitor / grafana
+
+## 16. Chain monitor
   balance of batacher / proposer / challenger / batchInbox for batcher
-## 15. Tests
+## 17. Tests
   - proposer / batcher / challenger can submit a tx successfully
   - L1 cost shown on the explorer
   - QKC cost verification
