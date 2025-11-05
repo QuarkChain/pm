@@ -56,8 +56,15 @@ Mainnet admint wallets
     - L1BlobBaseFeeScalar: 114098
   - SuperChainConfig [address](https://docs.optimism.io/reference/addresses): 0xC2Be75506d5724086DEB7245bd260Cc9753911Be
     - Submission:
-      - MaxChannelDuration for batcher: 6h
+      - MaxChannelDuration for batcher: 900 / 3h
       - OutputRootProposalInterval for proposer: 12h
+      - Cost
+        - delta submission: https://sepolia.etherscan.io/tx/0x415809eea9f4cf5d38da5e4064b53c36137be6c7f6f3750cec836cc0eec77751
+        - hashkey: https://etherscan.io/tx/0xec79b9ad6594e388829a3063fa8bce371a8b341928f55a939aa72e52be0401ca
+        - delta propose: https://sepolia.etherscan.io/tx/0x8e18a93466b7ca702cb09fb3b754318502f5c82d2a7471d900cdb8677ae20daf
+        - hashkey propose: https://etherscan.io/tx/0x4b3731f755d4a2a61f8db93755b83767f999931592cb6c33e4c294fd762532a6
+        - hashkey resolve: https://etherscan.io/address/0x82bdac18f0fbaed34d6a644e9713530259885426
+
 
 ## 7. Run op-up
 `REMOTE_SIGNER=1 just up --es`
@@ -89,14 +96,7 @@ Mainnet admint wallets
 
 ### 7.5 Verify
  - Verify all the binary are launched successfully
- - Verify that we use the right superchainConfigProxy
  - Verify code for L1 + L2 contracts
- - Verify the batcher cost for 6hrs submission
-   - delta submission: https://sepolia.etherscan.io/tx/0x415809eea9f4cf5d38da5e4064b53c36137be6c7f6f3750cec836cc0eec77751
-   - hashkey: https://etherscan.io/tx/0xec79b9ad6594e388829a3063fa8bce371a8b341928f55a939aa72e52be0401ca
-   - delta propose: https://sepolia.etherscan.io/tx/0x8e18a93466b7ca702cb09fb3b754318502f5c82d2a7471d900cdb8677ae20daf
-   - hashkey propose: https://etherscan.io/tx/0x4b3731f755d4a2a61f8db93755b83767f999931592cb6c33e4c294fd762532a6
-   - hashkey resolve: https://etherscan.io/address/0x82bdac18f0fbaed34d6a644e9713530259885426
 
 ### 7.6 Double check private RPC
 
@@ -124,6 +124,62 @@ upgradeAndCall(opChainProxyAdmin, systemConfigProxy, systemConfigImpl, calldata)
 
 ## 9. Set L1BaseFeeScalar/L1BlobBaseFeeScalar using proxyAdminOwner
 
+## 10. Set eip1559Denominator/eip1559Elasticity
+
+## 10 Verify the deployment
+### 10.1 Verify the admin owner for L1 and L2
+#### L1 admin
+```bash
+# pick one of the L1 contract, e.g. systemConfigProxyAddress
+# query the proxy admin address, check if the address is the same as we deployed
+cast call $SYSTEM_CONFIG_PROXY "admin()" -r $L1_RPC_URL
+# query the admin owner of the proxy admin, check if the address is the same as the l1ProxyAdminOwner
+cast call $OP_CHAIN_PROXY_ADMIN_IMPL "owner()" -r $L1_RPC_URL
+```
+#### L2 admin
+```bash
+# pick one of the L2 contract, e.g. L2StandardBridge
+# query the proxy admin address, check if the address is the same as we deployed
+cast call 0x4200000000000000000000000000000000000010 "admin()"
+# query the admin owner of the proxy admin, check if the address is the same as the l2ProxyAdminOwner
+cast call 0x4200000000000000000000000000000000000018 "owner()"
+```
+
+### 10.2 Verify the parameters 
+#### 10.2.1 Check with $SYSTEM_CONFIG_PROXY
+  l2ChainID
+  superchainConfig
+  systemConfigOwner
+  unsafeBlockSigner
+  batcher
+batchInboxAddress
+  l1BaseFeeScalarMultiplier
+  l1BlobBaseFeeScalarMultiplier
+  operatorFeeScalar
+  operatorFeeConstant
+eip1559DenominatorCanyon
+eip1559Denominator
+eip1559Elasticity
+  gasLimit
+
+#### 10.2.2 Check rollup_config and genesis
+##### rollup config
+ - sequencerWindowSize
+ - eip1559DenominatorCanyon
+ - eip1559Denominator
+ - eip1559Elasticity
+
+
+### 10.2.3 Check with L2 Contract
+Query baseFeeVaultRecipient / l1FeeVaultRecipient / sequencerFeeVaultRecipient
+```bash
+# baseFeeVaultRecipient
+cast call 0x4200000000000000000000000000000000000019 "recipient()"
+# l1FeeVaultRecipient
+cast call 0x420000000000000000000000000000000000001A "recipient()"
+# sequencerFeeVaultRecipient
+cast call 0x4200000000000000000000000000000000000011 "recipient()"
+```
 ## 10. Initial Test
 Refer to this [doc](https://github.com/QuarkChain/pm/blob/main/L2/opup_devnet_test.md)
 
