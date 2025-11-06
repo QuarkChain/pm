@@ -146,29 +146,58 @@ cast call 0x4200000000000000000000000000000000000018 "owner()"
 ```
 
 ### 10.2 Verify the parameters 
-#### 10.2.1 Check with $SYSTEM_CONFIG_PROXY
-  l2ChainID
-  superchainConfig
-  systemConfigOwner
-  unsafeBlockSigner
-  batcher
-batchInboxAddress
-  l1BaseFeeScalarMultiplier
-  l1BlobBaseFeeScalarMultiplier
-  operatorFeeScalar
-  operatorFeeConstant
-eip1559DenominatorCanyon
-eip1559Denominator
-eip1559Elasticity
-  gasLimit
+#### 10.2.1 Check with L1 contract
+##### SYSTEM_CONFIG_PROXY
+ - l2ChainID
+ - superchainConfig
+ - systemConfigOwner
+ - unsafeBlockSigner
+ - batcher
+ - batchInboxAddress
+ - l1BaseFeeScalar
+ - l1BlobBaseFeeScalar
+ - operatorFeeScalar
+ - operatorFeeConstant
+ - eip1559DenominatorCanyon
+ - eip1559Denominator
+ - gasLimit
+
+##### DISPUTE_GAME_FACTORY_PROXY
+```bash
+cast call $DISPUTE_GAME_FACTORY_PROXY "gameImpls(uint32)" 1 -r $L1_RPC_URL
+# check proposer
+cast call $PERMISSIONED_DISPUTE_GAME_IMPL "proposer()" -r $L1_RPC_URL
+# check challenger
+cast call $PERMISSIONED_DISPUTE_GAME_IMPL "challenger()" -r $L1_RPC_URL
+```
 
 #### 10.2.2 Check rollup_config and genesis
 ##### rollup config
+ - batcherAddr
+ - gasLimit
  - sequencerWindowSize
+ - l1_chain_id
+ - l2_chain_id
+ - batch_inbox_address
+ - deposit_contract_address (OptimismPortalProxy)
+ - l1_system_config_address
+ - protocol_versions_address
  - eip1559DenominatorCanyon
  - eip1559Denominator
  - eip1559Elasticity
-
+ - l1BaseFeeScalarMultiplier
+ - l1BlobBaseFeeScalarMultiplier
+ - isSoulBackedByNative
+ - use_inbox_contract
+##### genesis
+ - chainId
+ - eip1559Elasticity
+ - eip1559Denominator
+ - eip1559DenominatorCanyon
+ - isSoulBackedByNative
+ - l1BaseFeeScalarMultiplier
+ - l1BlobBaseFeeScalarMultiplier
+  
 
 ### 10.2.3 Check with L2 Contract
 Query baseFeeVaultRecipient / l1FeeVaultRecipient / sequencerFeeVaultRecipient
