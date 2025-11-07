@@ -102,8 +102,22 @@ Mainnet admint wallets
 
 ## 8. Set new superchainConfigProxy
 ```bash
+# prepare L1 contract address
+just l1 > address.json
+function json2_to_env() {
+  for key0 in $( jq -r 'to_entries|map("\(.key)")|.[]' $1 ); do
+    value=$(jq -r \.$key0 $1)
+    skey=$(echo $key0 | sed -r 's/([a-z0-9])([A-Z])/\1_\L\2/g' | sed -e 's/\(.*\)/\U\1/')
+    echo $skey=$value
+    export $skey=$value
+  done
+}
+json2_to_env address.json
+```
+
+```bash
 # 1. deploy StorageSetter
-forge create src/universal/StorageSetter.sol:StorageSetter --broadcast --private-key $PRIVATE_KEY --rpc-url $RPC_URL
+forge create src/universal/StorageSetter.sol:StorageSetter --broadcast --private-key $GS_ADMIN_PRIVATE_KEY --rpc-url $L1_RPC_URL
 
 # 2. prepare calldata for upgradeAndCall
 cast calldata "setBytes32(bytes32, bytes32)" 0x0000000000000000000000000000000000000000000000000000000000000000 0x0000000000000000000000000000000000000000000000000000000000000000
@@ -123,8 +137,13 @@ upgradeAndCall(opChainProxyAdmin, systemConfigProxy, systemConfigImpl, calldata)
 ```
 
 ## 9. Set L1BaseFeeScalar/L1BlobBaseFeeScalar using proxyAdminOwner
+ - L1BaseFeeScalar: 58803
+ - L1BlobBaseFeeScalar: 114098
 
 ## 10. Set eip1559Denominator/eip1559Elasticity
+ - eip1559Denominator: 50
+ - eip1559Elasticity: 6
+
 
 ## 10 Verify the deployment
 ### 10.1 Verify the admin owner for L1 and L2
