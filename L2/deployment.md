@@ -177,8 +177,8 @@ cast call 0x4200000000000000000000000000000000000018 "owner()"
  - l1BlobBaseFeeScalar
  - operatorFeeScalar
  - operatorFeeConstant
- - eip1559DenominatorCanyon
  - eip1559Denominator
+ - eip1559Elasticity
  - gasLimit
 
 ##### DISPUTE_GAME_FACTORY_PROXY
