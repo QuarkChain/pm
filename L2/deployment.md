@@ -91,7 +91,7 @@ Mainnet admint wallets
  - batchInboxAddress: 0xf62e8574B92dc8764c5Ad957b5B0311595f5A3f9
 
 ### 7.4 MaxChannelDuration && OutputRootProposalInterval
- - MaxChannelDuration: 1800 (1800 * 12 / 3600 = 6)
+ - MaxChannelDuration: 900 (900 * 12 / 3600 = 3)
  - OutputRootProposalInterval: 12h
 
 ### 7.5 Verify
