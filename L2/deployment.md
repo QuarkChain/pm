@@ -241,6 +241,10 @@ Refer to this [doc](https://github.com/QuarkChain/pm/blob/main/L2/opup_devnet_te
 
 ## 15. op-challenger / op-monitor / grafana
 
+## 16. FDG watcher and test
+
+## 16. Firewall and 2fa
+
 ## 16. Chain monitor
   balance of batacher / proposer / challenger / batchInbox for batcher
 ## 17. Tests
