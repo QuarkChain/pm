@@ -243,10 +243,12 @@ Refer to this [doc](https://github.com/QuarkChain/pm/blob/main/L2/opup_devnet_te
 
 ## 16. FDG watcher and test
 
-## 16. Firewall and 2fa
+## 17. Firewall and 2fa
 
-## 16. Chain monitor
+## 18. Chain monitor
   balance of batacher / proposer / challenger / batchInbox for batcher
+## 19. Update doc
+
 ## 17. Tests
   - proposer / batcher / challenger can submit a tx successfully
   - L1 cost shown on the explorer
