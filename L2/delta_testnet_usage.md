@@ -2,11 +2,17 @@
 
 ```bash
 Token Migration: https://migration.delta.testnet.l2.quarkchain.io
+Token Migration ProxyAdmin: 0x60aaAe696D5Ac236513b2598a87FC5e9ea7EA85D
+Token Migration Proxy: 0x117be5BFF6b6424D4Be658BFFdDF5C897663A49e
+tQKC ERC20 Token: sep:0xC359FCF9328143f798C197B86856e656411aBC48
+
 ERC20 Bridge: https://bridge.delta.testnet.l2.quarkchain.io
+
 Faucet: https://qkc-l2-delta-faucet.eth.sep.w3link.io
+
 Explorer：https://explorer.delta.testnet.l2.quarkchain.io or http://65.109.69.98
 RPC: https://rpc.delta.testnet.l2.quarkchain.io:8545 or http://65.109.110.98:8545 
-Custom Gas Token: sep:
+
 Portal: 0x7f59517cd129c29da65768fd028990bcb436b02e
 System Config: 0x41d0e63bdb755cc6492df78981ce3bf45e451636
 
@@ -25,14 +31,14 @@ Dispute Game Grafana:
 
 First, ensure you've some sepolia gas, otherwise go [here](https://www.alchemy.com/faucets/ethereum-sepolia) for faucet.
 
-Then invoke the `mint` function on etherscan [here](https://sepolia.etherscan.io/address/<CGT>#writeContract).
+Then invoke the `mint` function on etherscan [here](https://sepolia.etherscan.io/address/0xC359FCF9328143f798C197B86856e656411aBC48#writeContract).
 
 Or simply run this:
 ```bash
 export L1_RPC_URL='http://65.108.230.142:8545'
 export PRIVATE_KEY=''# input your own pk
 
-cast send <CGT> 'mint()' --private-key $PRIVATE_KEY -r $L1_RPC_URL
+cast send 0xC359FCF9328143f798C197B86856e656411aBC48 'mint()' --private-key $PRIVATE_KEY -r $L1_RPC_URL
 ```
 
-After that you can cross the claimed `Custom Gas Token` to L2 via `Token Migration`
+After that you can cross the claimed tQKC to L2 via `Token Migration`
