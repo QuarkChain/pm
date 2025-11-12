@@ -235,21 +235,24 @@ Refer to this [doc](https://github.com/QuarkChain/pm/blob/main/L2/opup_devnet_te
 
 ## 12. Lauch Public RPC Node
 
-## 13. Explorer / Domain / Faucet
+## 13. Domain(Explorer+RPC) / Faucet
 
-## 14. Custom Bridge / Roll Bridge
+## 14. Migration Bridge
+Need to confirm the UI + allowance (https://github.com/QuarkChain/quarkchain-migrate-website/issues/1)
 
-## 15. op-challenger / op-monitor / grafana
+## 15. Roll Bridge
+Need to determine the ERC20 token listed on the UI
 
-## 16. FDG watcher and test
+## 16. op-monitor + grafana / FDG watcher / FDF test
 
-## 17. Firewall and 2fa
-
-## 18. Chain monitor
+## 17. Chain monitor
   balance of batacher / proposer / challenger / batchInbox for batcher
+
+## 18. Firewall and 2fa
+
 ## 19. Update doc
 
-## 17. Tests
+## 20. Tests
   - proposer / batcher / challenger can submit a tx successfully
   - L1 cost shown on the explorer
   - QKC cost verification
