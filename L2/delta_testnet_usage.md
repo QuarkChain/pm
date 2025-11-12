@@ -8,7 +8,7 @@ tQKC ERC20 Token: sep:0xC359FCF9328143f798C197B86856e656411aBC48
 
 ERC20 Bridge: https://bridge.delta.testnet.l2.quarkchain.io
 
-Faucet: https://qkc-l2-delta-faucet.eth.sep.w3link.io
+Faucet: https://qkc-l2-delta-faucet.eth.sep.web3gateway.dev
 
 Explorer：https://explorer.delta.testnet.l2.quarkchain.io or http://65.109.69.98
 RPC: https://rpc.delta.testnet.l2.quarkchain.io:8545 or http://65.109.110.98:8545 
