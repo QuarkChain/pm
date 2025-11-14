@@ -249,6 +249,33 @@ Need to determine the ERC20 token listed on the UI
   balance of batacher / proposer / challenger / batchInbox for batcher
 
 ## 18. Firewall and 2fa
+port list
+```bash
+ssh
+  222
+blockscout
+  80
+  8080
+  8081
+  7432
+  7433
+op-node
+  9003
+  8547 - monitor
+op-geth
+  8545 - public rpc
+  30303
+da-server
+  8888  
+```
+
+Edit the rules
+```bash
+sudo ufw status numbered
+sudo ufw delete 2
+sudo ufw allow from 65.21.21.253 to any port 8547 proto tcp
+sudo ufw allow from 65.109.110.98 to any port 8545 proto tcp
+```
 
 ## 19. Update doc
 
