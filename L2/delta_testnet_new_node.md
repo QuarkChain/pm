@@ -106,9 +106,9 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --authrpc.port=8551 \
   --authrpc.jwtsecret=./jwt.txt \
   --rollup.disabletxpoolgossip \
-  --rollup.sequencerhttp=http://65.109.69.98:8545 \
+  --rollup.sequencerhttp=http://65.109.110.98:8545 \
   --rollup.enabletxpooladmission \
-  --bootnodes enode://b784ec66d5d41c7c9d2c270e1eae90235cc7d4fec8b53e9f64f816ce9337595603a09364bbea0801a7806c9b15b6077fa232ddc591b80ce5116093e0859468b1@65.109.69.98:30303 2>&1 | tee -a geth.log -i
+  --bootnodes enode://bca0a705e3ff2dd759724ed4b95a5ce01dc23c4fa0e208828cf275be77b7014dbad551e566cd557f56065e04d435800ae1223e5e060301ea8ad77b9714fc815f@65.109.110.98:30303 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
 Replace the public node's peer ID in the p2p.static option:
@@ -119,7 +119,7 @@ Replace the public node's peer ID in the p2p.static option:
   --rollup.config=./delta_testnet_rollup.json \
   --rpc.port=8547 \
   --rpc.enable-admin \
-  --p2p.static=/ip4/65.109.69.98/tcp/9003/p2p/16Uiu2HAm5JKYQtLhZbShQuXYBcn6rY8rv9rv2SLTK6ZS5KaY4ukp \
+  --p2p.static=/ip4/65.109.110.98/tcp/9003/p2p/16Uiu2HAmUz5ueaopZhJP4VE3qDqFKSAyLdxq7aNPo3FiWMkj8Nze \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
@@ -157,9 +157,9 @@ Replace the public node's peer ID in the p2p.static option:
   --authrpc.port=8551 \
   --authrpc.jwtsecret=./jwt.txt \
   --rollup.disabletxpoolgossip \
-  --rollup.sequencerhttp=http://65.109.69.98:8545 \
+  --rollup.sequencerhttp=http://65.109.110.98:8545 \
   --rollup.enabletxpooladmission \
-  --bootnodes enode://b784ec66d5d41c7c9d2c270e1eae90235cc7d4fec8b53e9f64f816ce9337595603a09364bbea0801a7806c9b15b6077fa232ddc591b80ce5116093e0859468b1@65.109.69.98:30303 2>&1 | tee -a geth.log -i
+  --bootnodes enode://bca0a705e3ff2dd759724ed4b95a5ce01dc23c4fa0e208828cf275be77b7014dbad551e566cd557f56065e04d435800ae1223e5e060301ea8ad77b9714fc815f@65.109.110.98:30303 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
 Replace the public node's peer ID in the p2p.static option:
@@ -170,7 +170,7 @@ Replace the public node's peer ID in the p2p.static option:
   --rollup.config=./delta_testnet_rollup.json \
   --rpc.port=8547 \
   --rpc.enable-admin \
-  --p2p.static=/ip4/65.109.69.98/tcp/9003/p2p/16Uiu2HAm5JKYQtLhZbShQuXYBcn6rY8rv9rv2SLTK6ZS5KaY4ukp \
+  --p2p.static=/ip4/65.109.110.98/tcp/9003/p2p/16Uiu2HAmUz5ueaopZhJP4VE3qDqFKSAyLdxq7aNPo3FiWMkj8Nze \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
