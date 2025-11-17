@@ -141,7 +141,7 @@ upgradeAndCall(opChainProxyAdmin, systemConfigProxy, systemConfigImpl, calldata)
  - L1BlobBaseFeeScalar: 114098
 
 ## 10. Set eip1559Denominator/eip1559Elasticity
- - eip1559Denominator: 50
+ - eip1559Denominator: 250
  - eip1559Elasticity: 6
 
 
