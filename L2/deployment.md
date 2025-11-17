@@ -11,11 +11,11 @@ These roles own proxy admins and contract owners.
   - l1ProxyAdminOwner (Gnosis Safe): Upgrade L1 contract implementations and own L1 contract roles (e.g., systemConfigOwner).. 
   - l2ProxyAdminOwner (Hardware wallet): Upgrade L2 contract implementations; own L2 contracts (e.g., SoulGasToken), and vault recipients (baseFeeVaultRecipient, l1FeeVaultRecipient, sequencerFeeVaultRecipient).
 
-Testnet admint wallets
+Testnet admin wallets
  - l1ProxyAdminOwner (Gnosis Safe): 0x91eDD257B4184aC152cce1bbEC29FD93979Ae0db
  - l2ProxyAdminOwner (Hardware Wallet): 0x187712a3e229498E9E42888761Ab9B92bceB46c7
 
-Mainnet admint wallets
+Mainnet admin wallets
  - l1ProxyAdminOwner (Gnosis Safe): [TBD]
  - l2ProxyAdminOwner (Hardware Wallet): [TBD]
 
@@ -243,7 +243,7 @@ Need to confirm the UI + allowance (https://github.com/QuarkChain/quarkchain-mig
 ## 15. Roll Bridge
 Need to determine the ERC20 token listed on the UI
 
-## 16. op-monitor + grafana / FDG watcher / FDF test
+## 16. op-monitor + grafana / FDG watcher / FDG test
 
 ## 17. Chain monitor
   balance of batacher / proposer / challenger / batchInbox for batcher
