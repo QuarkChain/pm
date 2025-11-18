@@ -67,7 +67,12 @@ Mainnet admin wallets
 
 
 ## 7. Run op-up
+```bash
+# Sepolia:
 `REMOTE_SIGNER=1 just up --es`
+# Mainnet:
+`REMOTE_SIGNER=1 MAINNET=1 just up --es`
+```
 
 ### 7.1 .envrc
 #### Testnet:
@@ -287,6 +292,7 @@ sudo ufw allow from 65.109.110.98 to any port 8545 proto tcp
   - 7702
   - Full node sync
   - Adhoc test
+  - Archiver test (Fusaka change)
 
 
 
