@@ -7,7 +7,7 @@ This document provides instructions for building binaries and setting up various
 ### 1. Building op-geth
 Clone the repository and build op-geth:
 ```bash
-git clone -b op-es https://github.com/QuarkChain/op-geth.git
+git clone -b delta_testnet https://github.com/QuarkChain/op-geth.git
 cd op-geth && make geth
 
 curl -LO https://raw.githubusercontent.com/QuarkChain/pm/refs/heads/main/L2/assets/delta_testnet_genesis.json
@@ -18,7 +18,7 @@ openssl rand -hex 32 > jwt.txt
 ### 2. Building op-node
 Clone and build op-node:
 ```bash
-git clone -b op-es https://github.com/QuarkChain/optimism.git
+git clone -b delta_testnet https://github.com/QuarkChain/optimism.git
 pushd optimism && make op-node && popd
 
 cp op-geth/jwt.txt optimism/op-node 
