@@ -42,6 +42,10 @@ Mainnet admin wallets
   - batchInbox proxy: 0xf62e8574B92dc8764c5Ad957b5B0311595f5A3f9
   - batchInbox impl: 0x900e510791F59705e86E9D6bc8be05f7679d8A3e
   - batchInbox proxyAdmin: 0xc2bf5eF8F82eD93f166B49CcF29D45699236Af03
+ ### Mainnet:
+  - batchInbox proxy: TBD
+  - batchInbox impl: TBD
+  - batchInbox proxyAdmin: TBD
 
 
  ## 6. Prepare parameters:
@@ -64,6 +68,19 @@ Mainnet admin wallets
         - delta propose: https://sepolia.etherscan.io/tx/0x8e18a93466b7ca702cb09fb3b754318502f5c82d2a7471d900cdb8677ae20daf
         - hashkey propose: https://etherscan.io/tx/0x4b3731f755d4a2a61f8db93755b83767f999931592cb6c33e4c294fd762532a6
         - hashkey resolve: https://etherscan.io/address/0x82bdac18f0fbaed34d6a644e9713530259885426
+  ### Mainnet:
+  - Chain ID: 100011
+  - soulGasTokenBlock: nil
+  - l2GenesisBlobTimeOffset: nil
+  - Scalar and Multiplier (more details [here](https://github.com/QuarkChain/optimism/issues/57#issuecomment-3471127676)):
+    - l1BaseFeeScalarMultiplier: 100000 (10^5)
+    - L1BlobBaseFeeScalarMultiplier: 10000000 (10^7)
+    - L1BaseFeeScalar: 58803
+    - L1BlobBaseFeeScalar: 114098
+  - SuperChainConfig [address](https://docs.optimism.io/reference/addresses): 0x95703e0982140D16f8ebA6d158FccEde42f04a4C
+    - Submission:
+      - MaxChannelDuration for batcher: 900 / 3h
+      - OutputRootProposalInterval for proposer: 12h
 
 
 ## 7. Run op-up
@@ -82,6 +99,13 @@ Mainnet admin wallets
  - L1_BEACON_ARCHIVER_URL: https://archive.testnet.ethstorage.io:9635 
  - L1_CHAIN_ID: 11155111
  - L2_CHAIN_ID: 110011
+ #### Mainnet:
+ - L1_RPC_URL: http://65.21.133.53:8545
+ - L1_RPC_KIND: standard
+ - L1_BEACON_URL: http://65.21.133.53:4200
+ - L1_BEACON_ARCHIVER_URL: https://archive.mainnet.ethstorage.io:9645 
+ - L1_CHAIN_ID: 1
+ - L2_CHAIN_ID: 100011
 
 ### 7.2 contract and op-deployer branch
  - contract: merge_op_contracts_v4.1.0
@@ -94,6 +118,12 @@ Mainnet admin wallets
  - Delete `soulGasTokenTimeOffset = "0x0"`
  - Delete `l2GenesisBlobTimeOffset = "0x0"`
  - batchInboxAddress: 0xf62e8574B92dc8764c5Ad957b5B0311595f5A3f9
+#### Testnet:
+ - l1BaseFeeScalarMultiplier: 100000
+ - L1BlobBaseFeeScalarMultiplier: 10000000
+ - Delete `soulGasTokenTimeOffset = "0x0"`
+ - Delete `l2GenesisBlobTimeOffset = "0x0"`
+ - batchInboxAddress: TBD 
 
 ### 7.4 MaxChannelDuration && OutputRootProposalInterval
  - MaxChannelDuration: 900 (900 * 12 / 3600 = 3)
