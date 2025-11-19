@@ -314,7 +314,9 @@ sudo ufw allow from 65.109.110.98 to any port 8545 proto tcp
 
 ## 19. Update doc
 
-## 20. Tests
+## 20. Minotor migration/bridge website
+
+## 21. Tests
   - proposer / batcher / challenger can submit a tx successfully
   - L1 cost shown on the explorer
   - QKC cost verification
