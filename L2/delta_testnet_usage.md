@@ -2,8 +2,8 @@
 
 ```bash
 Token Migration: https://migration.delta.testnet.l2.quarkchain.io
-Token Migration ProxyAdmin: 0x60aaAe696D5Ac236513b2598a87FC5e9ea7EA85D
-Token Migration Proxy: 0x117be5BFF6b6424D4Be658BFFdDF5C897663A49e
+Token Migration ProxyAdmin: 0x057A5B2E5dc34f4B666bb2ff80Ebd64E22B037De
+Token Migration Proxy: 0x6309Ab1d95b12FbBd256FC1aEe9154A18fC961d1
 tQKC ERC20 Token: sep:0xC359FCF9328143f798C197B86856e656411aBC48
 
 ERC20 Bridge: https://bridge.delta.testnet.l2.quarkchain.io
