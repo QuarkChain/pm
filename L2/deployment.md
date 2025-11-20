@@ -16,8 +16,8 @@ Testnet admin wallets
  - l2ProxyAdminOwner (Hardware Wallet): 0x187712a3e229498E9E42888761Ab9B92bceB46c7
 
 Mainnet admin wallets
- - l1ProxyAdminOwner (Gnosis Safe): [TBD]
- - l2ProxyAdminOwner (Hardware Wallet): [TBD]
+ - l1ProxyAdminOwner (Gnosis Safe): 0xC427A79CFc2863fd6c7D22dE394efE8935190734
+ - l2ProxyAdminOwner (Hardware Wallet): 0x9e370b5f0c91c0f00ffe863d16d5c1b8d5f1746b
 
  ## 3. Prepare op-signer service for batcher, proposer and challenger
  - Setup op-signer service for op-proposer/op-batcher/op-challenger (https://github.com/QuarkChain/pm/blob/main/op-signer.md)
