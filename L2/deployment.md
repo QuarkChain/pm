@@ -43,9 +43,9 @@ Mainnet admin wallets
   - batchInbox impl: 0x900e510791F59705e86E9D6bc8be05f7679d8A3e
   - batchInbox proxyAdmin: 0xc2bf5eF8F82eD93f166B49CcF29D45699236Af03
  ### Mainnet:
-  - batchInbox proxy: TBD
-  - batchInbox impl: TBD
-  - batchInbox proxyAdmin: TBD
+  - batchInbox proxy: 0xA68295D77766d4e04854746e3C1873c891C1765E
+  - batchInbox impl: 0x5e84c44a636A07582CED20C4DA8c1A3f22944aC6
+  - batchInbox proxyAdmin: 0x32b9d95A3eDA963e968DF4ABb18908b3caC9268b
 
 
  ## 6. Prepare parameters:
