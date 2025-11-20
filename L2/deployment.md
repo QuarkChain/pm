@@ -123,7 +123,7 @@ Mainnet admin wallets
  - L1BlobBaseFeeScalarMultiplier: 10000000
  - Delete `soulGasTokenTimeOffset = "0x0"`
  - Delete `l2GenesisBlobTimeOffset = "0x0"`
- - batchInboxAddress: TBD 
+ - batchInboxAddress: 0xA68295D77766d4e04854746e3C1873c891C1765E 
 
 ### 7.4 MaxChannelDuration && OutputRootProposalInterval
  - MaxChannelDuration: 900 (900 * 12 / 3600 = 3)
