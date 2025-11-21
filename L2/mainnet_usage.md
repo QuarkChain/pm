@@ -1,0 +1,26 @@
+# Basic Info
+
+```bash
+Token Migration: 
+Token Migration ProxyAdmin: 
+Token Migration Proxy: 
+QKC ERC20 Token: 
+
+ERC20 Bridge: 
+
+Explorer：http://65.109.115.36
+RPC: http://65.109.115.36:8545 
+Dispute Game Grafana:  
+
+Portal: 0xf9ea3f50acbacb122bfb9ceb6cf79c6cfcf35c7a
+System Config: 0xbb8bed33614599947d5ca1844de546e59ea50e7a
+
+BatchInbox Proxy Address: 0xA68295D77766d4e04854746e3C1873c891C1765E
+BatchInbox ProxyAdmin: 0x32b9d95A3eDA963e968DF4ABb18908b3caC9268b
+
+op-proposer: 0xB5dA0e6016CA504996a699EE6fa41Bda9bbf2A4C
+op-batcher: 0xf503A133Df0c43B4814b12098604655ad9FE7e3B
+op-challenger: 0xc0Dc54795D2CE024c4446588acBc83644E8f2169
+sequencer: 0xEC7EDc4fC720d9DF6Dcb25399a5F5cea60D6AF71
+
+Proxy Admin Owner: 
