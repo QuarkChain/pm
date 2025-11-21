@@ -118,7 +118,7 @@ Mainnet admin wallets
  - Delete `soulGasTokenTimeOffset = "0x0"`
  - Delete `l2GenesisBlobTimeOffset = "0x0"`
  - batchInboxAddress: 0xf62e8574B92dc8764c5Ad957b5B0311595f5A3f9
-#### Testnet:
+#### Mainnet:
  - l1BaseFeeScalarMultiplier: 100000
  - L1BlobBaseFeeScalarMultiplier: 10000000
  - Delete `soulGasTokenTimeOffset = "0x0"`
