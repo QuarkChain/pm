@@ -100,9 +100,9 @@ Mainnet admin wallets
  - L1_CHAIN_ID: 11155111
  - L2_CHAIN_ID: 110011
  #### Mainnet:
- - L1_RPC_URL: http://65.21.133.53:8545
+ - L1_RPC_URL: <mainnet-rpc-url>
  - L1_RPC_KIND: standard
- - L1_BEACON_URL: http://65.21.133.53:4200
+ - L1_BEACON_URL: <mainnet-beacon-url>
  - L1_BEACON_ARCHIVER_URL: https://archive.mainnet.ethstorage.io:9645 
  - L1_CHAIN_ID: 1
  - L2_CHAIN_ID: 100011
