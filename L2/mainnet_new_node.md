@@ -51,7 +51,7 @@ mkdir safedb
   --ws.api=eth,txpool,net \
   --syncmode=full \
   --gcmode=archive \
-  --networkid=1 \
+  --networkid=100011 \
   --authrpc.vhosts="*" \
   --authrpc.port=8551 \
   --authrpc.jwtsecret=./jwt.txt \
