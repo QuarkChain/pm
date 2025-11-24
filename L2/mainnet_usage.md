@@ -1,15 +1,15 @@
 # Basic Info
 
 ```bash
-Token Migration: 
+Token Migration: https://migration.mainnet.l2.quarkchain.io/
 Token Migration ProxyAdmin: 0xD7d18e4D11bae01C6a057E0585cB8A1B8DB85cd7
 Token Migration Proxy: 0x47e2609C842a12c395623298114587C616e142c3
 QKC ERC20 Token: 0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664
 
 ERC20 Bridge: 
 
-Explorer：http://65.109.115.36
-RPC: http://65.109.115.36:8545 
+Explorer：https://explorer.mainnet.l2.quarkchain.io/ or http://65.109.115.36
+RPC: https://rpc.mainnet.l2.quarkchain.io:8545 or http://65.109.69.90:8545 
 Dispute Game Grafana:  
 
 Portal: 0xf9ea3f50acbacb122bfb9ceb6cf79c6cfcf35c7a
