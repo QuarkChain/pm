@@ -159,7 +159,7 @@ Replace the public node's peer ID in the p2p.static option:
   --rollup.disabletxpoolgossip \
   --rollup.sequencerhttp=http://65.109.69.90:8545 \
   --rollup.enabletxpooladmission \
-  --bootnodes enode://bc2e38b31df9ce699ad492c8598c4a9d63c5600582a61b4bcecf2b52d394338da52fc1d9cd4ae696e6624f5106ce7ca41b643c072a96beb9c880c78aa0cb00a9@65.109.69.90 2>&1 | tee -a geth.log -i
+  --bootnodes enode://bc2e38b31df9ce699ad492c8598c4a9d63c5600582a61b4bcecf2b52d394338da52fc1d9cd4ae696e6624f5106ce7ca41b643c072a96beb9c880c78aa0cb00a9@65.109.69.90:30303 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
 Replace the public node's peer ID in the p2p.static option:
