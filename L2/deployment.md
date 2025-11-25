@@ -319,7 +319,7 @@ sudo ufw allow from 65.109.110.98 to any port 8545 proto tcp
 ## 21. Tests
   - proposer / batcher / challenger can submit a tx successfully
   - L1 cost shown on the explorer
-  - QKC cost verification
+  - QKC cost [verification](https://explorer.mainnet.l2.quarkchain.io/tx/0xfb2f61f252e409f590d2c3f1f3dc68fb48d76bbbf731391b8efade1d1aaaf411)
   - ERC20 deposit and withdraw
   - 7702
   - Full node sync
