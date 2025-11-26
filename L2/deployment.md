@@ -100,9 +100,9 @@ Mainnet admin wallets
  - L1_CHAIN_ID: 11155111
  - L2_CHAIN_ID: 110011
  #### Mainnet:
- - L1_RPC_URL: <mainnet-rpc-url>
+ - L1_RPC_URL: mainnet-rpc-url
  - L1_RPC_KIND: standard
- - L1_BEACON_URL: <mainnet-beacon-url>
+ - L1_BEACON_URL: mainnet-beacon-url
  - L1_BEACON_ARCHIVER_URL: https://archive.mainnet.ethstorage.io:9645 
  - L1_CHAIN_ID: 1
  - L2_CHAIN_ID: 100011
@@ -263,27 +263,27 @@ cast call 0x420000000000000000000000000000000000001A "recipient()"
 # sequencerFeeVaultRecipient
 cast call 0x4200000000000000000000000000000000000011 "recipient()"
 ```
-## 10. Initial Test
+## 11. Initial Test
 Refer to this [doc](https://github.com/QuarkChain/pm/blob/main/L2/opup_devnet_test.md)
 
-## 11 Submit the genesis / rollup config / L1 contract address to the pm repo
+## 12 Submit the genesis / rollup config / L1 contract address to the pm repo
 
-## 12. Lauch Public RPC Node
+## 13. Lauch Public RPC Node
 
-## 13. Domain(Explorer+RPC) / Faucet
+## 14. Domain(Explorer+RPC) / Faucet
 
-## 14. Migration Bridge
+## 15. Migration Bridge
 Need to confirm the UI + allowance (https://github.com/QuarkChain/quarkchain-migrate-website/issues/1)
 
-## 15. Roll Bridge
+## 16. Roll Bridge
 Need to determine the ERC20 token listed on the UI
 
-## 16. op-monitor + grafana / FDG watcher / FDG test
+## 17. op-monitor + grafana / FDG watcher / FDG test
 
-## 17. Chain monitor
+## 18. Chain monitor
   balance of batacher / proposer / challenger / batchInbox for batcher
 
-## 18. Firewall and 2fa
+## 19. Firewall and 2fa
 port list
 ```bash
 ssh
@@ -312,11 +312,11 @@ sudo ufw allow from 65.21.21.253 to any port 8547 proto tcp
 sudo ufw allow from 65.109.110.98 to any port 8545 proto tcp
 ```
 
-## 19. Update doc
+## 20. Update doc
 
-## 20. Minotor migration/bridge website
+## 21. Minotor migration/bridge website
 
-## 21. Tests
+## 22. Tests
   - proposer / batcher / challenger can submit a tx successfully
   - L1 cost shown on the explorer
   - QKC cost [verification](https://explorer.mainnet.l2.quarkchain.io/tx/0xfb2f61f252e409f590d2c3f1f3dc68fb48d76bbbf731391b8efade1d1aaaf411)
