@@ -74,11 +74,11 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
   --p2p.no-discovery \
-  --p2p.sync.onlyreqtostatic\
+  --p2p.sync.onlyreqtostatic \
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
   --l1.beacon=$L1_BEACON_URL \
-  --l1.beacon-archiver=https://archive.testnet.ethstorage.io:9635 \
+  --l1.beacon-archiver=https://archive.mainnet.ethstorage.io:9645 \
   --l1.cache-size=0 \
   --safedb.path=safedb \
   --syncmode=execution-layer | tee -a node.log -i
@@ -128,7 +128,7 @@ Replace the public node's peer ID in the p2p.static option:
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
   --l1.beacon=$L1_BEACON_URL \
-  --l1.beacon-archiver=https://archive.testnet.ethstorage.io:9635 \
+  --l1.beacon-archiver=https://archive.mainnet.ethstorage.io:9645 \
   --l1.cache-size=0 \
   --safedb.path=safedb \
   --syncmode=execution-layer | tee -a node.log -i
@@ -179,7 +179,7 @@ Replace the public node's peer ID in the p2p.static option:
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
   --l1.beacon=$L1_BEACON_URL \
-  --l1.beacon-archiver=https://archive.testnet.ethstorage.io:9635 \
+  --l1.beacon-archiver=https://archive.mainnet.ethstorage.io:9645 \
   --l1.cache-size=0 \
   --safedb.path=safedb \
   --syncmode=execution-layer | tee -a node.log -i
