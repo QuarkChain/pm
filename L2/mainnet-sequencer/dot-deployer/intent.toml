@@ -1,0 +1,40 @@
+configType = "custom"
+l1ChainID = 1
+fundDevAccounts = false
+l1ContractsLocator = "file:///home/qkc/qkc-l2-mainnet/optimism/packages/contracts-bedrock/forge-artifacts/"
+l2ContractsLocator = "file:///home/qkc/qkc-l2-mainnet/optimism/packages/contracts-bedrock/forge-artifacts/"
+
+[superchainRoles]
+  superchainProxyAdminOwner = "0xC427A79CFc2863fd6c7D22dE394efE8935190734"
+  superchainGuardian = "0xC427A79CFc2863fd6c7D22dE394efE8935190734"
+  protocolVersionsOwner = "0xC427A79CFc2863fd6c7D22dE394efE8935190734"
+  challenger = "0xc0Dc54795D2CE024c4446588acBc83644E8f2169"
+
+[[chains]]
+  id = "0x00000000000000000000000000000000000000000000000000000000000186ab"
+  baseFeeVaultRecipient = "0x9e370b5f0c91c0f00ffe863d16d5c1b8d5f1746b"
+  l1FeeVaultRecipient = "0x9e370b5f0c91c0f00ffe863d16d5c1b8d5f1746b"
+  sequencerFeeVaultRecipient = "0x9e370b5f0c91c0f00ffe863d16d5c1b8d5f1746b"
+  eip1559DenominatorCanyon = 250
+  eip1559Denominator = 50
+  eip1559Elasticity = 6
+  gasLimit = 60000000
+  operatorFeeScalar = 0
+  operatorFeeConstant = 0
+  [chains.roles]
+    l1ProxyAdminOwner = "0xC427A79CFc2863fd6c7D22dE394efE8935190734"
+    l2ProxyAdminOwner = "0x9e370b5f0c91c0f00ffe863d16d5c1b8d5f1746b"
+    systemConfigOwner = "0xC427A79CFc2863fd6c7D22dE394efE8935190734"
+    unsafeBlockSigner = "0xEC7EDc4fC720d9DF6Dcb25399a5F5cea60D6AF71"
+    batcher = "0xf503A133Df0c43B4814b12098604655ad9FE7e3B"
+    proposer = "0xB5dA0e6016CA504996a699EE6fa41Bda9bbf2A4C"
+    challenger = "0xc0Dc54795D2CE024c4446588acBc83644E8f2169"
+
+[globalDeployOverrides]
+  useInboxContract = true
+  deploySoulGasToken = true
+  isSoulBackedByNative = true
+  batchInboxAddress = "0xA68295D77766d4e04854746e3C1873c891C1765E"
+  l1BaseFeeScalarMultiplier = 100000
+  l1BlobBaseFeeScalarMultiplier = 10000000
+  sequencerWindowSize = 7200

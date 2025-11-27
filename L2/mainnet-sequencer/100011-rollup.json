@@ -1,0 +1,51 @@
+{
+  "genesis": {
+    "l1": {
+      "hash": "0xba78de1b102980ae8ccae1a3d2b290be8260d5884b597439f5b7b76e2c60891d",
+      "number": 23846376
+    },
+    "l2": {
+      "hash": "0xb7304b17b2078608f84bc5b44c05aaddc9677de61cf8fc24680580514f5033d4",
+      "number": 0
+    },
+    "l2_time": 1763715827,
+    "system_config": {
+      "batcherAddr": "0xf503a133df0c43b4814b12098604655ad9fe7e3b",
+      "overhead": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "scalar": "0x010000000000000000000000000000000000000000000000000c5fc500000558",
+      "gasLimit": 60000000,
+      "eip1559Params": "0x0000000000000000",
+      "operatorFeeParams": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "block_time": 2,
+  "max_sequencer_drift": 600,
+  "seq_window_size": 7200,
+  "channel_timeout": 300,
+  "l1_chain_id": 1,
+  "l2_chain_id": 100011,
+  "regolith_time": 0,
+  "canyon_time": 0,
+  "delta_time": 0,
+  "ecotone_time": 0,
+  "fjord_time": 0,
+  "granite_time": 0,
+  "holocene_time": 0,
+  "isthmus_time": 0,
+  "batch_inbox_address": "0xa68295d77766d4e04854746e3c1873c891c1765e",
+  "deposit_contract_address": "0xf9ea3f50acbacb122bfb9ceb6cf79c6cfcf35c7a",
+  "l1_system_config_address": "0xbb8bed33614599947d5ca1844de546e59ea50e7a",
+  "protocol_versions_address": "0xa838dfa10d304f5b67db5041ce29ddf49d9a847f",
+  "chain_op_config": {
+    "eip1559Elasticity": 6,
+    "eip1559Denominator": 50,
+    "eip1559DenominatorCanyon": 250,
+    "isSoulBackedByNative": true,
+    "l1BaseFeeScalarMultiplier": 100000,
+    "l1BlobBaseFeeScalarMultiplier": 10000000
+  },
+  "inbox_contract_config": {
+    "use_inbox_contract": true
+  }
+}
+
