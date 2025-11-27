@@ -1,6 +1,6 @@
 1. op-geth
 ```bash
-./build/bin/geth --datadir ./datadir --http --http.corsdomain="*" --http.vhosts="*" --http.addr=0.0.0.0 --http.api=web3,debug,eth,txpool,net,engine,miner --ws --ws.addr=127.0.0.1 --ws.port=8546 --ws.origins="*" --ws.api=debug,eth,txpool,net,engine,miner --syncmode=full --gcmode=archive --nodiscover --maxpeers=5 --networkid=100011 --authrpc.vhosts="*" --authrpc.addr=127.0.0.1 --authrpc.port=8551 --httpsgt --httpsgt.addr=0.0.0.0 --authrpc.jwtsecret=./jwt.txt --rollup.disabletxpoolgossip 2>&1 | tee -a geth.log -
+./build/bin/geth --datadir ./datadir --http --http.corsdomain="*" --http.vhosts="*" --http.addr=0.0.0.0 --http.api=web3,debug,eth,txpool,net,engine,miner --ws --ws.addr=127.0.0.1 --ws.port=8546 --ws.origins="*" --ws.api=debug,eth,txpool,net,engine,miner --syncmode=full --gcmode=archive --nodiscover --maxpeers=5 --networkid=100011 --authrpc.vhosts="*" --authrpc.addr=127.0.0.1 --authrpc.port=8551 --httpsgt --httpsgt.addr=0.0.0.0 --authrpc.jwtsecret=./jwt.txt --rollup.disabletxpoolgossip 2>&1 | tee -a geth.log -i
 ```
 
 2. op-node
