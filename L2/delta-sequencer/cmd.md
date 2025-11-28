@@ -9,7 +9,7 @@ export SEQUENCER_PRIVATE_KEY=
 export L1_RPC_URL=
 export L1_BEACON_URL=
 
-./bin/op-node --l2=http://localhost:8551 --l2.jwt-secret=./jwt.txt --sequencer.enabled --sequencer.l1-confs=5 --verifier.l1-confs=4 --rollup.config=./rollup.json --rpc.addr=0.0.0.0 --rpc.port=8547 --p2p.listen.ip=0.0.0.0 --p2p.listen.tcp=9003 --p2p.listen.udp=9003 --p2p.no-discovery --rpc.enable-admin --p2p.sequencer.key=$SEQUENCER_PRIVATE_KEY --l1=$L1_RPC_URL --l1.rpckind=standard --l1.beacon=$L1_BEACON_URL --safedb.path=safedb --l1.cache-size=0 --l1.beacon-archiver=https://archive.testnet.ethstorage.io:9635 2>&1 | tee -a node.log -i
+./bin/op-node --l2=http://localhost:8551 --l2.jwt-secret=./jwt.txt --sequencer.enabled --sequencer.l1-confs=5 --verifier.l1-confs=4 --rollup.config=./delta_testnet_rollup.json --rpc.addr=0.0.0.0 --rpc.port=8547 --p2p.listen.ip=0.0.0.0 --p2p.listen.tcp=9003 --p2p.listen.udp=9003 --p2p.no-discovery --rpc.enable-admin --p2p.sequencer.key=$SEQUENCER_PRIVATE_KEY --l1=$L1_RPC_URL --l1.rpckind=standard --l1.beacon=$L1_BEACON_URL --safedb.path=safedb --l1.cache-size=0 --l1.beacon-archiver=https://archive.testnet.ethstorage.io:9635 2>&1 | tee -a node.log -i
 ```
 
 3. op-batcher
@@ -46,4 +46,52 @@ export ROLLUP_CONFIG=../op-program/chainconfig/configs/110011-rollup.json
 export L2_GENESIS=../op-program/chainconfig/configs/110011-genesis-l2.json
 
 bin/op-challenger --l1-eth-rpc $L1_RPC_URL --l1-beacon $L1_BEACON_URL --l2-eth-rpc http://localhost:8545 --rollup-rpc http://localhost:8547 --datadir ./datadir --cannon-server ../op-program/bin/op-program --cannon-bin ../cannon/bin/cannon --cannon-prestate ../op-program/bin/prestate-mt64.bin.gz --signer.endpoint $SIGNER_ENDPOINT --signer.address 0xD52294b39aB62F85b13A07Df5550c0711E6eADbD --signer.tls.ca $CHALLENGER_CA_CRT --signer.tls.cert $CHALLENGER_TLS_CRT --signer.tls.key $CHALLENGER_TLS_KET --signer.tls.enabled --cannon-rollup-config $ROLLUP_CONFIG --cannon-l2-genesis $L2_GENESIS --game-factory-address 0x10ffc150ebad96e483d0af6bbe8b48803b7f65d4 --trace-type cannon --trace-type permissioned --unsafe-allow-invalid-prestate 2>&1 | tee -a challenger.log -i
+```
+
+6. RPC
+
+```bash
+./build/bin/geth --datadir ./datadir \
+  --http \
+  --http.corsdomain="*" \
+  --http.vhosts="*" \
+  --http.addr=0.0.0.0 \
+  --http.api=web3,eth,txpool,net,debug \
+  --ws \
+  --ws.addr=0.0.0.0 \
+  --ws.port=8546 \
+  --ws.origins="*" \
+  --ws.api=eth,txpool,net \
+  --syncmode=full \
+  --gcmode=archive \
+  --networkid=110011 \
+  --authrpc.vhosts="*" \
+  --authrpc.port=8551 \
+  --authrpc.jwtsecret=./jwt.txt \
+  --rollup.disabletxpoolgossip \
+  --rollup.sequencerhttp=http://138.197.211.198:8545 \
+  --rollup.enabletxpooladmission \
+  --bootnodes enode://acdc3a0a889ce9a8d06d7f99026726407797d44df6e8d5a66f89a0402ed4426ba6af8ba7208dcfe839cb3501cb5abf96582d03ba9e6c178c07f5ed3af8c1cc66@138.197.211.198:30303 2>&1 | tee -a geth.log -i
+  ```
+
+```bash
+./bin/op-node --l2=http://localhost:8551 \
+  --l2.jwt-secret=./jwt.txt \
+  --verifier.l1-confs=4 \
+  --rollup.config=./delta_testnet_rollup.json \
+  --rpc.port=8547 \
+  --rpc.enable-admin \
+  --p2p.static=/ip4/138.197.211.198/tcp/9003/p2p/16Uiu2HAm6NH2X3HfVgGVMoVFoicCzLVNRNs6GdvqvARcPUK8Fz5a \
+  --p2p.listen.ip=0.0.0.0 \
+  --p2p.listen.tcp=9003 \
+  --p2p.listen.udp=9003 \
+  --p2p.no-discovery \
+  --p2p.sync.onlyreqtostatic\
+  --l1=$L1_RPC_URL \
+  --l1.rpckind=$L1_RPC_KIND \
+  --l1.beacon=$L1_BEACON_URL \
+  --l1.beacon-archiver=https://archive.testnet.ethstorage.io:9635 \
+  --l1.cache-size=0 \
+  --safedb.path=safedb \
+  --syncmode=execution-layer | tee -a node.log -i
 ```
