@@ -69,9 +69,9 @@ bin/op-challenger --l1-eth-rpc $L1_RPC_URL --l1-beacon $L1_BEACON_URL --l2-eth-r
   --authrpc.port=8551 \
   --authrpc.jwtsecret=./jwt.txt \
   --rollup.disabletxpoolgossip \
-  --rollup.sequencerhttp=http://138.197.211.198:8545 \
+  --rollup.sequencerhttp=http://165.232.50.209:8545 \
   --rollup.enabletxpooladmission \
-  --bootnodes enode://acdc3a0a889ce9a8d06d7f99026726407797d44df6e8d5a66f89a0402ed4426ba6af8ba7208dcfe839cb3501cb5abf96582d03ba9e6c178c07f5ed3af8c1cc66@138.197.211.198:30303 2>&1 | tee -a geth.log -i
+  --bootnodes enode://6154bda7f1267aa050521e8681a453ba0e0ae2fa98d0e98aed373d83bc3922828bafd6f81bc034bbc95ead6756d7dd090d689df3c6c0155582b0de946c9088ac@165.232.50.209:30303 2>&1 | tee -a geth.log -i
   ```
 
 ```bash
@@ -81,7 +81,7 @@ bin/op-challenger --l1-eth-rpc $L1_RPC_URL --l1-beacon $L1_BEACON_URL --l2-eth-r
   --rollup.config=./delta_testnet_rollup.json \
   --rpc.port=8547 \
   --rpc.enable-admin \
-  --p2p.static=/ip4/138.197.211.198/tcp/9003/p2p/16Uiu2HAm6NH2X3HfVgGVMoVFoicCzLVNRNs6GdvqvARcPUK8Fz5a \
+  --p2p.static=/ip4/165.232.50.209/tcp/9003/p2p/16Uiu2HAkvBkwjFxgV3McMjo8rm2XU7HhAbTr8LwVfFkbJVEkawtX \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
