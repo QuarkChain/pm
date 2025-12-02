@@ -58,7 +58,7 @@ mkdir safedb
   --rollup.disabletxpoolgossip \
   --rollup.sequencerhttp=http://65.109.69.98:8545 \
   --rollup.enabletxpooladmission \
-  --bootnodes enode://b784ec66d5d41c7c9d2c270e1eae90235cc7d4fec8b53e9f64f816ce9337595603a09364bbea0801a7806c9b15b6077fa232ddc591b80ce5116093e0859468b1@65.109.69.98:30303 2>&1 | tee -a geth.log -i
+  --bootnodes enode://cdd400b29afaee96d2ace4dec36034d7f5b0b7b43e039874fa3d94417f765e6c773b456b572ac6f28643da48a55b76e617994433a40ed66ab8d14baf015d9c94@65.109.69.98:30303 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
 Locate the sequencer's peer ID and replace it in the p2p.static option:
