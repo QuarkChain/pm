@@ -8,8 +8,8 @@ QKC ERC20 Token: 0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664
 
 ERC20 Bridge: https://bridge.mainnet.l2.quarkchain.io/
 
-Explorer：https://explorer.mainnet.l2.quarkchain.io/ or http://65.109.115.36
-RPC: https://rpc.mainnet.l2.quarkchain.io:8545 or http://65.109.69.90:8545 
+Explorer：https://explorer.mainnet.l2.quarkchain.io
+RPC: https://rpc.mainnet.l2.quarkchain.io:8545
 Dispute Game Grafana: https://grafana.quarkchain.io/d/QKC-L2-Mainnet/op-dispute-monitor-mainnet
 
 Portal: 0xf9ea3f50acbacb122bfb9ceb6cf79c6cfcf35c7a
