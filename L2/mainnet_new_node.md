@@ -8,11 +8,12 @@ This document provides instructions for building binaries and setting up various
 Clone the repository and build op-geth:
 ```bash
 git clone -b qkc_mainnet_v1 https://github.com/QuarkChain/op-geth.git
-cd op-geth && make geth
+pushd op-geth && make geth
 
 curl -LO https://raw.githubusercontent.com/QuarkChain/pm/refs/heads/main/L2/assets/mainnet_genesis.json
 ./build/bin/geth init --datadir=datadir --state.scheme hash mainnet_genesis.json
 openssl rand -hex 32 > jwt.txt
+popd
 ```
 
 ### 2. Building op-node
