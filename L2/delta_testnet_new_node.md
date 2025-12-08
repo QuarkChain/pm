@@ -109,7 +109,7 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --rollup.disabletxpoolgossip \
   --rollup.sequencerhttp=http://65.109.110.98:8545 \
   --rollup.enabletxpooladmission \
-  --bootnodes enode://9404003b004f2de6aac7632a5db9a8ec804a212228d78824e4e1a61de5319542d53da1432d5e89ac53ce0c81de6a83e52888949be558c135091fd2f93862f2d1@65.109.110.98:30303 2>&1 | tee -a geth.log -i
+  --bootnodes enode://9a62ad39ba5101fcc7f83f852fba6e6b700dbbd22ae28a038aa496ab92ca976e2ea2b0b000c71ccbb6a128abb9d65f29a1aa85c5259b4512482189cd2dab860f@65.109.110.98:30303 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
 Replace the public node's peer ID in the p2p.static option:
@@ -120,7 +120,7 @@ Replace the public node's peer ID in the p2p.static option:
   --rollup.config=./delta_testnet_rollup.json \
   --rpc.port=8547 \
   --rpc.enable-admin \
-  --p2p.static=/ip4/65.109.110.98/tcp/9003/p2p/16Uiu2HAm65NkqUHktvb9SK1CaKEroX7e7t8GWUSb3Fw87ecVbEoU \
+  --p2p.static=/ip4/65.109.110.98/tcp/9003/p2p/16Uiu2HAmJZ3yDKfVo4eUK45xvNiexp6JrC6epVdsAqykToy4c6mA \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
@@ -160,7 +160,7 @@ Replace the public node's peer ID in the p2p.static option:
   --rollup.disabletxpoolgossip \
   --rollup.sequencerhttp=http://65.109.110.98:8545 \
   --rollup.enabletxpooladmission \
-  --bootnodes enode://9404003b004f2de6aac7632a5db9a8ec804a212228d78824e4e1a61de5319542d53da1432d5e89ac53ce0c81de6a83e52888949be558c135091fd2f93862f2d1@65.109.110.98:30303 2>&1 | tee -a geth.log -i
+  --bootnodes enode://9a62ad39ba5101fcc7f83f852fba6e6b700dbbd22ae28a038aa496ab92ca976e2ea2b0b000c71ccbb6a128abb9d65f29a1aa85c5259b4512482189cd2dab860f@65.109.110.98:30303 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
 Replace the public node's peer ID in the p2p.static option:
@@ -171,7 +171,7 @@ Replace the public node's peer ID in the p2p.static option:
   --rollup.config=./delta_testnet_rollup.json \
   --rpc.port=8547 \
   --rpc.enable-admin \
-  --p2p.static=/ip4/65.109.110.98/tcp/9003/p2p/16Uiu2HAm65NkqUHktvb9SK1CaKEroX7e7t8GWUSb3Fw87ecVbEoU \
+  --p2p.static=/ip4/65.109.110.98/tcp/9003/p2p/16Uiu2HAmJZ3yDKfVo4eUK45xvNiexp6JrC6epVdsAqykToy4c6mA \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
