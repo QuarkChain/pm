@@ -57,9 +57,9 @@ mkdir safedb
   --authrpc.port=8551 \
   --authrpc.jwtsecret=./jwt.txt \
   --rollup.disabletxpoolgossip \
-  --rollup.sequencerhttp=http://159.89.28.91:8545 \
+  --rollup.sequencerhttp=http://65.109.69.98:8545 \
   --rollup.enabletxpooladmission \
-  --bootnodes enode://6cfe34e706379487cfa560d6c2e322e45dd3fe5123e5a86a30c21e2797b78d220090ec75f96afef897ad4d3bed1ccb898e9a60adffd3e62e8af38ba80021e7f2@159.89.28.91:30303 2>&1 | tee -a geth.log -i
+  --bootnodes enode://cdd400b29afaee96d2ace4dec36034d7f5b0b7b43e039874fa3d94417f765e6c773b456b572ac6f28643da48a55b76e617994433a40ed66ab8d14baf015d9c94@65.109.69.98:30303 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
 Locate the sequencer's peer ID and replace it in the p2p.static option:
@@ -70,7 +70,7 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --rollup.config=./delta_testnet_rollup.json \
   --rpc.port=8547 \
   --rpc.enable-admin \
-  --p2p.static=/ip4/159.89.28.91/tcp/9003/p2p/16Uiu2HAm442rbponQb4UCMdCRRvom8pk9zdUyke5MD71k3auTGrJ \
+  --p2p.static=/ip4/65.109.69.98/tcp/9003/p2p/16Uiu2HAm5JKYQtLhZbShQuXYBcn6rY8rv9rv2SLTK6ZS5KaY4ukp \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
