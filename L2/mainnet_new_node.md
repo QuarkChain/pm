@@ -57,7 +57,7 @@ mkdir safedb
   --authrpc.port=8551 \
   --authrpc.jwtsecret=./jwt.txt \
   --rollup.disabletxpoolgossip \
-  --rollup.sequencerhttp=http://65.109.115.36:8545 \
+  --rollup.sequencerhttp=http://sequencer.mainnet.l2.quarkchain.io:8545 \
   --rollup.enabletxpooladmission \
   --bootnodes enode://d50aa6776bef2345b3492332595956771a19bbf35803bc64574aa130b8d4e779b64782b42abc9194ae47ae05c0850372501cc563f3e61dd188ec868446a216d6@65.109.115.36:30303 2>&1 | tee -a geth.log -i
 ```
@@ -107,7 +107,7 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --authrpc.port=8551 \
   --authrpc.jwtsecret=./jwt.txt \
   --rollup.disabletxpoolgossip \
-  --rollup.sequencerhttp=http://65.109.69.90:8545 \
+  --rollup.sequencerhttp=https://rpc.mainnet.l2.quarkchain.io:8545 \
   --rollup.enabletxpooladmission \
   --bootnodes enode://bc2e38b31df9ce699ad492c8598c4a9d63c5600582a61b4bcecf2b52d394338da52fc1d9cd4ae696e6624f5106ce7ca41b643c072a96beb9c880c78aa0cb00a9@65.109.69.90:30303 2>&1 | tee -a geth.log -i
 ```
@@ -158,7 +158,7 @@ Replace the public node's peer ID in the p2p.static option:
   --authrpc.port=8551 \
   --authrpc.jwtsecret=./jwt.txt \
   --rollup.disabletxpoolgossip \
-  --rollup.sequencerhttp=http://65.109.69.90:8545 \
+  --rollup.sequencerhttp=https://rpc.mainnet.l2.quarkchain.io:8545 \
   --rollup.enabletxpooladmission \
   --bootnodes enode://bc2e38b31df9ce699ad492c8598c4a9d63c5600582a61b4bcecf2b52d394338da52fc1d9cd4ae696e6624f5106ce7ca41b643c072a96beb9c880c78aa0cb00a9@65.109.69.90:30303 2>&1 | tee -a geth.log -i
 ```
