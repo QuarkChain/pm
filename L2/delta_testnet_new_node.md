@@ -50,6 +50,7 @@ mkdir safedb
   --ws.port=8546 \
   --ws.origins="*" \
   --ws.api=eth,txpool,net \
+  --nat="extip:<YOUR_PUBLIC_IP>" \
   --syncmode=full \
   --gcmode=archive \
   --networkid=110011 \
@@ -59,7 +60,7 @@ mkdir safedb
   --rollup.disabletxpoolgossip \
   --rollup.sequencerhttp=http://65.109.69.98:8545 \
   --rollup.enabletxpooladmission \
-  --bootnodes enode://cdd400b29afaee96d2ace4dec36034d7f5b0b7b43e039874fa3d94417f765e6c773b456b572ac6f28643da48a55b76e617994433a40ed66ab8d14baf015d9c94@65.109.69.98:30303 2>&1 | tee -a geth.log -i
+  --bootnodes=enr:-Iq4QDHDcAZR2jEx5QmB9qVKqj09nGJmzL6BIUCvw7qAOQE2N0gNmYL_Y785oDNgNklurT48cJQes3cDjpAPd0M0DuyGAZshloRDgmlkgnY0gmlwhIbRyI2Jc2VjcDI1NmsxoQJomlhwBBNILJqxhmbDKKp9bCY64ML7U17eyeZ34FlZJYN1ZHCCjh8 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
 Locate the sequencer's peer ID and replace it in the p2p.static option:
@@ -74,7 +75,8 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
-  --p2p.no-discovery \
+  --p2p.advertise.ip=<YOUR_PUBLIC_IP> \
+  --p2p.bootnodes=enr:-Iq4QK5jDs6AyoCM5mSgAX1dPGoHtwUwkhgn7CVpVEl_D4_xduIVPwdnGDGwAGBmwwYIzoUjg2IHkmiww3kswk3RWhCGAZshpYCkgmlkgnY0gmlwhIbRyI2Jc2VjcDI1NmsxoQJNw-Bv4LbZD1lJHwH1j1f4gHCMTuV2kUaPbLyns3yD1YN1ZHCCJoc \
   --p2p.sync.onlyreqtostatic\
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
@@ -102,6 +104,7 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --ws.port=8546 \
   --ws.origins="*" \
   --ws.api=eth,txpool,net \
+  --nat="extip:<YOUR_PUBLIC_IP>" \
   --networkid=110011 \
   --authrpc.vhosts="*" \
   --authrpc.port=8551 \
@@ -109,7 +112,7 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --rollup.disabletxpoolgossip \
   --rollup.sequencerhttp=http://65.109.110.98:8545 \
   --rollup.enabletxpooladmission \
-  --bootnodes enode://9a62ad39ba5101fcc7f83f852fba6e6b700dbbd22ae28a038aa496ab92ca976e2ea2b0b000c71ccbb6a128abb9d65f29a1aa85c5259b4512482189cd2dab860f@65.109.110.98:30303 2>&1 | tee -a geth.log -i
+  --bootnodes=enr:-Iq4QDHDcAZR2jEx5QmB9qVKqj09nGJmzL6BIUCvw7qAOQE2N0gNmYL_Y785oDNgNklurT48cJQes3cDjpAPd0M0DuyGAZshloRDgmlkgnY0gmlwhIbRyI2Jc2VjcDI1NmsxoQJomlhwBBNILJqxhmbDKKp9bCY64ML7U17eyeZ34FlZJYN1ZHCCjh8 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
 Replace the public node's peer ID in the p2p.static option:
@@ -120,12 +123,11 @@ Replace the public node's peer ID in the p2p.static option:
   --rollup.config=./delta_testnet_rollup.json \
   --rpc.port=8547 \
   --rpc.enable-admin \
-  --p2p.static=/ip4/65.109.110.98/tcp/9003/p2p/16Uiu2HAmJZ3yDKfVo4eUK45xvNiexp6JrC6epVdsAqykToy4c6mA \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
-  --p2p.no-discovery \
-  --p2p.sync.onlyreqtostatic \
+  --p2p.advertise.ip=<YOUR_PUBLIC_IP> \
+  --p2p.bootnodes=enr:-Iq4QK5jDs6AyoCM5mSgAX1dPGoHtwUwkhgn7CVpVEl_D4_xduIVPwdnGDGwAGBmwwYIzoUjg2IHkmiww3kswk3RWhCGAZshpYCkgmlkgnY0gmlwhIbRyI2Jc2VjcDI1NmsxoQJNw-Bv4LbZD1lJHwH1j1f4gHCMTuV2kUaPbLyns3yD1YN1ZHCCJoc \
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
   --l1.beacon=$L1_BEACON_URL \
@@ -151,6 +153,7 @@ Replace the public node's peer ID in the p2p.static option:
   --ws.port=8546 \
   --ws.origins="*" \
   --ws.api=eth,txpool,net \
+  --nat="extip:<YOUR_PUBLIC_IP>" \
   --syncmode=full \
   --gcmode=archive \
   --networkid=110011 \
@@ -160,7 +163,7 @@ Replace the public node's peer ID in the p2p.static option:
   --rollup.disabletxpoolgossip \
   --rollup.sequencerhttp=http://65.109.110.98:8545 \
   --rollup.enabletxpooladmission \
-  --bootnodes enode://9a62ad39ba5101fcc7f83f852fba6e6b700dbbd22ae28a038aa496ab92ca976e2ea2b0b000c71ccbb6a128abb9d65f29a1aa85c5259b4512482189cd2dab860f@65.109.110.98:30303 2>&1 | tee -a geth.log -i
+  --bootnodes=enr:-Iq4QDHDcAZR2jEx5QmB9qVKqj09nGJmzL6BIUCvw7qAOQE2N0gNmYL_Y785oDNgNklurT48cJQes3cDjpAPd0M0DuyGAZshloRDgmlkgnY0gmlwhIbRyI2Jc2VjcDI1NmsxoQJomlhwBBNILJqxhmbDKKp9bCY64ML7U17eyeZ34FlZJYN1ZHCCjh8 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
 Replace the public node's peer ID in the p2p.static option:
@@ -171,12 +174,11 @@ Replace the public node's peer ID in the p2p.static option:
   --rollup.config=./delta_testnet_rollup.json \
   --rpc.port=8547 \
   --rpc.enable-admin \
-  --p2p.static=/ip4/65.109.110.98/tcp/9003/p2p/16Uiu2HAmJZ3yDKfVo4eUK45xvNiexp6JrC6epVdsAqykToy4c6mA \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
-  --p2p.no-discovery \
-  --p2p.sync.onlyreqtostatic \
+  --p2p.advertise.ip=<YOUR_PUBLIC_IP> \
+  --p2p.bootnodes=enr:-Iq4QK5jDs6AyoCM5mSgAX1dPGoHtwUwkhgn7CVpVEl_D4_xduIVPwdnGDGwAGBmwwYIzoUjg2IHkmiww3kswk3RWhCGAZshpYCkgmlkgnY0gmlwhIbRyI2Jc2VjcDI1NmsxoQJNw-Bv4LbZD1lJHwH1j1f4gHCMTuV2kUaPbLyns3yD1YN1ZHCCJoc \
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
   --l1.beacon=$L1_BEACON_URL \
