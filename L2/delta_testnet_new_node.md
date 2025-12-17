@@ -65,6 +65,7 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
 ### 2. Launch op-node (syncmode=execution-layer)
 Locate the sequencer's peer ID and replace it in the p2p.static option:
 ```bash
+export PUBLIC_IP=<YOUR_PUBLIC_IP>
 ./bin/op-node --l2=http://localhost:8551 \
   --l2.jwt-secret=./jwt.txt \
   --verifier.l1-confs=4 \
@@ -115,6 +116,7 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
 ### 2. Launch op-node (syncmode=execution-layer)
 Replace the public node's peer ID in the p2p.static option:
 ```bash
+export PUBLIC_IP=<YOUR_PUBLIC_IP>
 ./bin/op-node --l2=http://localhost:8551 \
   --l2.jwt-secret=./jwt.txt \
   --verifier.l1-confs=4 \
@@ -165,6 +167,7 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
 ### 2. Launch op-node (syncmode=execution-layer)
 Replace the public node's peer ID in the p2p.static option:
 ```bash
+export PUBLIC_IP=<YOUR_PUBLIC_IP>
 ./bin/op-node --l2=http://localhost:8551 \
   --l2.jwt-secret=./jwt.txt \
   --verifier.l1-confs=4 \
