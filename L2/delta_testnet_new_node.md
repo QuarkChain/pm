@@ -39,6 +39,7 @@ mkdir safedb
  - Set the sequencer's HTTP endpoint (rollup.sequencerhttp)
  - Configure firewall rules to restrict this node access to the sequencer (http RPC)
 ```bash
+export PUBLIC_IP=<YOUR_PUBLIC_IP>
 ./build/bin/geth --datadir ./datadir \
   --http \
   --http.corsdomain="*" \
@@ -50,7 +51,7 @@ mkdir safedb
   --ws.port=8546 \
   --ws.origins="*" \
   --ws.api=eth,txpool,net \
-  --nat="extip:<YOUR_PUBLIC_IP>" \
+  --nat="extip:${PUBLIC_IP}" \
   --syncmode=full \
   --gcmode=archive \
   --networkid=110011 \
@@ -74,7 +75,7 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
-  --p2p.advertise.ip=<YOUR_PUBLIC_IP> \
+  --p2p.advertise.ip=$PUBLIC_IP \
   --p2p.sync.onlyreqtostatic\
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
@@ -90,6 +91,7 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
 ### 1. Launch op-geth (snap sync)
  - Set the public node's HTTP endpoint (rollup.sequencerhttp)
 ```bash
+export PUBLIC_IP=<YOUR_PUBLIC_IP>
 ./build/bin/geth --datadir ./datadir   \
   --http \
   --http.corsdomain="*" \
@@ -101,7 +103,7 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --ws.port=8546 \
   --ws.origins="*" \
   --ws.api=eth,txpool,net \
-  --nat="extip:<YOUR_PUBLIC_IP>" \
+  --nat="extip:${PUBLIC_IP}" \
   --networkid=110011 \
   --authrpc.vhosts="*" \
   --authrpc.port=8551 \
@@ -122,7 +124,7 @@ Replace the public node's peer ID in the p2p.static option:
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
-  --p2p.advertise.ip=<YOUR_PUBLIC_IP> \
+  --p2p.advertise.ip=$PUBLIC_IP \
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
   --l1.beacon=$L1_BEACON_URL \
@@ -137,6 +139,7 @@ Replace the public node's peer ID in the p2p.static option:
  - Set the sequencer's HTTP endpoint (rollup.sequencerhttp)
  - Configure firewall rules to restrict this node access to the sequencer (http RPC)
 ```bash
+export PUBLIC_IP=<YOUR_PUBLIC_IP>
 ./build/bin/geth --datadir ./datadir \
   --http \
   --http.corsdomain="*" \
@@ -148,7 +151,7 @@ Replace the public node's peer ID in the p2p.static option:
   --ws.port=8546 \
   --ws.origins="*" \
   --ws.api=eth,txpool,net \
-  --nat="extip:<YOUR_PUBLIC_IP>" \
+  --nat="extip:${PUBLIC_IP}" \
   --syncmode=full \
   --gcmode=archive \
   --networkid=110011 \
@@ -171,7 +174,7 @@ Replace the public node's peer ID in the p2p.static option:
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
-  --p2p.advertise.ip=<YOUR_PUBLIC_IP> \
+  --p2p.advertise.ip=$PUBLIC_IP \
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
   --l1.beacon=$L1_BEACON_URL \
