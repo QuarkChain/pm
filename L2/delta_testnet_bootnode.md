@@ -26,7 +26,7 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
   --extaddr "${PUBLIC_IP}:36383" \
   --nodedb opgeth-nodedb \
   --bootnodes "" \
-  --chainid 110011 | tee -a boot-geth.log -i
+  --chainid 110011 | tee -a boot-opgeth.log -i
 ```
 Notes:
  - Add --dump to print all nodes in the DHT for every 10s for debugging.
@@ -42,7 +42,7 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
   --extaddr "${PUBLIC_IP}:9863" \
   --nodedb opnode-nodedb \
   --bootnodes "" \
-  --opstack-chainid 110011 | tee -a boot-geth.log -i
+  --opstack-chainid 110011 | tee -a boot-opnode.log -i
 ```
 
 Reference:
