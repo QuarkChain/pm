@@ -40,6 +40,7 @@ mkdir safedb
  - Configure firewall rules to restrict this node access to the sequencer (http RPC)
 ```bash
 export PUBLIC_IP=<YOUR_PUBLIC_IP>
+
 ./build/bin/geth --datadir ./datadir \
   --http \
   --http.corsdomain="*" \
@@ -66,6 +67,7 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
 Locate the sequencer's peer ID and replace it in the p2p.static option:
 ```bash
 export PUBLIC_IP=<YOUR_PUBLIC_IP>
+
 ./bin/op-node --l2=http://localhost:8551 \
   --l2.jwt-secret=./jwt.txt \
   --verifier.l1-confs=4 \
@@ -93,6 +95,7 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
  - Set the public node's HTTP endpoint (rollup.sequencerhttp)
 ```bash
 export PUBLIC_IP=<YOUR_PUBLIC_IP>
+
 ./build/bin/geth --datadir ./datadir   \
   --http \
   --http.corsdomain="*" \
@@ -117,6 +120,7 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
 Replace the public node's peer ID in the p2p.static option:
 ```bash
 export PUBLIC_IP=<YOUR_PUBLIC_IP>
+
 ./bin/op-node --l2=http://localhost:8551 \
   --l2.jwt-secret=./jwt.txt \
   --verifier.l1-confs=4 \
@@ -142,6 +146,7 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
  - Configure firewall rules to restrict this node access to the sequencer (http RPC)
 ```bash
 export PUBLIC_IP=<YOUR_PUBLIC_IP>
+
 ./build/bin/geth --datadir ./datadir \
   --http \
   --http.corsdomain="*" \
@@ -168,6 +173,7 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
 Replace the public node's peer ID in the p2p.static option:
 ```bash
 export PUBLIC_IP=<YOUR_PUBLIC_IP>
+
 ./bin/op-node --l2=http://localhost:8551 \
   --l2.jwt-secret=./jwt.txt \
   --verifier.l1-confs=4 \
