@@ -20,7 +20,7 @@ cd op-geth && go build -o ./build/bin/devp2p ./cmd/devp2p
 ```bash
 export PUBLIC_IP=<YOUR_PUBLIC_IP>
 
-/build/bin/devp2p discv5 listen \
+./build/bin/devp2p discv5 listen \
   --nodekey $(cat op-geth.bootnode.key) \
   --addr :36383 \
   --extaddr "${PUBLIC_IP}:36383" \
@@ -36,7 +36,7 @@ Notes:
 ```bash
 export PUBLIC_IP=<YOUR_PUBLIC_IP>
 
-/build/bin/devp2p discv5 listen \
+./build/bin/devp2p discv5 listen \
   --nodekey $(cat op-node.bootnode.key) \
   --addr :9863 \
   --extaddr "${PUBLIC_IP}:9863" \
