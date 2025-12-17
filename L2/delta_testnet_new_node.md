@@ -33,7 +33,7 @@ curl -LO https://raw.githubusercontent.com/QuarkChain/pm/refs/heads/main/L2/asse
 mkdir safedb
 ```
 
-## Launching the Public RPC Node + Boot Node + Static Node (op-node)
+## Launching the Public RPC Node + Static Node (op-node)
 
 ### 1. Launch op-geth (full sync, archive)
  - Set the sequencer's HTTP endpoint (rollup.sequencerhttp)
@@ -59,8 +59,7 @@ mkdir safedb
   --authrpc.jwtsecret=./jwt.txt \
   --rollup.disabletxpoolgossip \
   --rollup.sequencerhttp=http://65.109.69.98:8545 \
-  --rollup.enabletxpooladmission \
-  --bootnodes=enr:-Iq4QDHDcAZR2jEx5QmB9qVKqj09nGJmzL6BIUCvw7qAOQE2N0gNmYL_Y785oDNgNklurT48cJQes3cDjpAPd0M0DuyGAZshloRDgmlkgnY0gmlwhIbRyI2Jc2VjcDI1NmsxoQJomlhwBBNILJqxhmbDKKp9bCY64ML7U17eyeZ34FlZJYN1ZHCCjh8 2>&1 | tee -a geth.log -i
+  --rollup.enabletxpooladmission 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
 Locate the sequencer's peer ID and replace it in the p2p.static option:
@@ -76,7 +75,6 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
   --p2p.advertise.ip=<YOUR_PUBLIC_IP> \
-  --p2p.bootnodes=enr:-Iq4QK5jDs6AyoCM5mSgAX1dPGoHtwUwkhgn7CVpVEl_D4_xduIVPwdnGDGwAGBmwwYIzoUjg2IHkmiww3kswk3RWhCGAZshpYCkgmlkgnY0gmlwhIbRyI2Jc2VjcDI1NmsxoQJNw-Bv4LbZD1lJHwH1j1f4gHCMTuV2kUaPbLyns3yD1YN1ZHCCJoc \
   --p2p.sync.onlyreqtostatic\
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
@@ -90,7 +88,6 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
 ## Launch a Snap Sync Node
 
 ### 1. Launch op-geth (snap sync)
- - Replace the public node's enode URL in the bootnodes option
  - Set the public node's HTTP endpoint (rollup.sequencerhttp)
 ```bash
 ./build/bin/geth --datadir ./datadir   \
@@ -111,8 +108,7 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --authrpc.jwtsecret=./jwt.txt \
   --rollup.disabletxpoolgossip \
   --rollup.sequencerhttp=http://65.109.110.98:8545 \
-  --rollup.enabletxpooladmission \
-  --bootnodes=enr:-Iq4QDHDcAZR2jEx5QmB9qVKqj09nGJmzL6BIUCvw7qAOQE2N0gNmYL_Y785oDNgNklurT48cJQes3cDjpAPd0M0DuyGAZshloRDgmlkgnY0gmlwhIbRyI2Jc2VjcDI1NmsxoQJomlhwBBNILJqxhmbDKKp9bCY64ML7U17eyeZ34FlZJYN1ZHCCjh8 2>&1 | tee -a geth.log -i
+  --rollup.enabletxpooladmission 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
 Replace the public node's peer ID in the p2p.static option:
@@ -127,7 +123,6 @@ Replace the public node's peer ID in the p2p.static option:
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
   --p2p.advertise.ip=<YOUR_PUBLIC_IP> \
-  --p2p.bootnodes=enr:-Iq4QK5jDs6AyoCM5mSgAX1dPGoHtwUwkhgn7CVpVEl_D4_xduIVPwdnGDGwAGBmwwYIzoUjg2IHkmiww3kswk3RWhCGAZshpYCkgmlkgnY0gmlwhIbRyI2Jc2VjcDI1NmsxoQJNw-Bv4LbZD1lJHwH1j1f4gHCMTuV2kUaPbLyns3yD1YN1ZHCCJoc \
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
   --l1.beacon=$L1_BEACON_URL \
@@ -162,8 +157,7 @@ Replace the public node's peer ID in the p2p.static option:
   --authrpc.jwtsecret=./jwt.txt \
   --rollup.disabletxpoolgossip \
   --rollup.sequencerhttp=http://65.109.110.98:8545 \
-  --rollup.enabletxpooladmission \
-  --bootnodes=enr:-Iq4QDHDcAZR2jEx5QmB9qVKqj09nGJmzL6BIUCvw7qAOQE2N0gNmYL_Y785oDNgNklurT48cJQes3cDjpAPd0M0DuyGAZshloRDgmlkgnY0gmlwhIbRyI2Jc2VjcDI1NmsxoQJomlhwBBNILJqxhmbDKKp9bCY64ML7U17eyeZ34FlZJYN1ZHCCjh8 2>&1 | tee -a geth.log -i
+  --rollup.enabletxpooladmission 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
 Replace the public node's peer ID in the p2p.static option:
@@ -178,7 +172,6 @@ Replace the public node's peer ID in the p2p.static option:
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
   --p2p.advertise.ip=<YOUR_PUBLIC_IP> \
-  --p2p.bootnodes=enr:-Iq4QK5jDs6AyoCM5mSgAX1dPGoHtwUwkhgn7CVpVEl_D4_xduIVPwdnGDGwAGBmwwYIzoUjg2IHkmiww3kswk3RWhCGAZshpYCkgmlkgnY0gmlwhIbRyI2Jc2VjcDI1NmsxoQJNw-Bv4LbZD1lJHwH1j1f4gHCMTuV2kUaPbLyns3yD1YN1ZHCCJoc \
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
   --l1.beacon=$L1_BEACON_URL \
