@@ -1,5 +1,5 @@
 # Hardware requirement
- - 1 vCPU, 1G memory
+ - 1 vCPU, 1 GB RAM
  - A static IP is required because the IP will be hardcoded in the code.
 
 # Build devp2p
