@@ -69,7 +69,10 @@ sudo ufw allow from <RPC_IP> to any port 8545 proto tcp
 ## Minotor fullnode liveness
 Alert if the fullnode can't follow the latest block number.
 
-# Migrate sequencer
+# Migrate Sequencer
+
+## Stop previous sequencer
+Make sure all the services in the previous sequencer are stopped.
 
 ## Start sequencer
 1. op-geth
