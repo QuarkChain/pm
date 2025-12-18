@@ -1,6 +1,6 @@
 # Requirements
  - 4 vCPU, 16 GB RAM, 512 GB disk (gp3)
- - Go 1.23+, Docker, mise v2025.4.5
+ - Go 1.23+, Docker, mise v2025.4.5, direnv 2.35.0
 
 # Launch Backup Sequencer
 
