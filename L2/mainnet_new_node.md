@@ -69,7 +69,6 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --verifier.l1-confs=4 \
   --rollup.config=./mainnet_rollup.json \
   --rpc.port=8547 \
-  --rpc.enable-admin \
   --p2p.static=/ip4/65.109.115.36/tcp/9003/p2p/16Uiu2HAmGTR27pWqX4j4V2mUV3R8sEfo1X9UF6wiyXmzxdgoKmwh \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
@@ -119,7 +118,6 @@ Replace the public node's peer ID in the p2p.static option:
   --verifier.l1-confs=4 \
   --rollup.config=./mainnet_rollup.json \
   --rpc.port=8547 \
-  --rpc.enable-admin \
   --p2p.static=/ip4/65.109.69.90/tcp/9003/p2p/16Uiu2HAkxLJCHidwuTfyW2bS9W89tTHoFaE3UGUNnWFf3xSUHZv1 \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
@@ -170,7 +168,6 @@ Replace the public node's peer ID in the p2p.static option:
   --verifier.l1-confs=4 \
   --rollup.config=./mainnet_rollup.json \
   --rpc.port=8547 \
-  --rpc.enable-admin \
   --p2p.static=/ip4/65.109.69.90/tcp/9003/p2p/16Uiu2HAkxLJCHidwuTfyW2bS9W89tTHoFaE3UGUNnWFf3xSUHZv1 \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
