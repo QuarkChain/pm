@@ -73,7 +73,6 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
   --verifier.l1-confs=4 \
   --rollup.config=./delta_testnet_rollup.json \
   --rpc.port=8547 \
-  --rpc.enable-admin \
   --p2p.static=/ip4/65.109.69.98/tcp/9003/p2p/16Uiu2HAm5JKYQtLhZbShQuXYBcn6rY8rv9rv2SLTK6ZS5KaY4ukp \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
@@ -126,7 +125,6 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
   --verifier.l1-confs=4 \
   --rollup.config=./delta_testnet_rollup.json \
   --rpc.port=8547 \
-  --rpc.enable-admin \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
@@ -179,7 +177,6 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
   --verifier.l1-confs=4 \
   --rollup.config=./delta_testnet_rollup.json \
   --rpc.port=8547 \
-  --rpc.enable-admin \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
