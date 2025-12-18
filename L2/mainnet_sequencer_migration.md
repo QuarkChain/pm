@@ -23,7 +23,6 @@ just op-challenger/op-challenger
 cd op-program
 make op-program
 make reproducible-prestate
-
 cd ..
 cd cannon
 make cannon
