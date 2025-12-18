@@ -157,7 +157,7 @@ Make sure all the services in the previous sequencer are stopped.
   --proposal-interval 12h \
   --game-type 1 \
   --signer.endpoint $SIGNER_ENDPOINT \
-  --signer.address PROPOSER_ADDR \
+  --signer.address $PROPOSER_ADDR \
   --signer.tls.ca $PROPOSER_CA_CRT \
   --signer.tls.cert $PROPOSER_TLS_CRT \
   --signer.tls.key $PROPOSER_TLS_KET \
