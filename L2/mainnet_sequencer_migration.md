@@ -62,7 +62,7 @@ export L2_GENESIS=${realpath ./op-program/chainconfig/configs/100011-genesis-l2.
 ```bash
 sudo ufw allow 30303
 sudo ufw allow 9003
-sudo ufw allow from <RPC_IP> to any port 8545 proto tcp
+sudo ufw allow 8545
 ```
 
 ## Minotor fullnode liveness
@@ -196,6 +196,13 @@ Start this only if L2 BLOB is enabled
 ## Config DNS
  - Update sequencer.mainnet.l2.quarkchain.io to the new IP
  - You may need to restart op-node for the change to take effect
+
+## Config firewall
+```bash
+sudo ufw allow 30303
+sudo ufw allow 9003
+sudo ufw allow from <RPC_IP> to any port 8545 proto tcp
+```
 
 ## Run a CL sync fullnode to double check the result
 If the new full node can CL-sync to the latest head, the migration is successful.
