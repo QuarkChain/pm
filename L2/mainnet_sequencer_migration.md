@@ -54,8 +54,8 @@ export CHALLENGER_CA_CRT=
 export CHALLENGER_TLS_CRT=
 export CHALLENGER_TLS_KET=
 
-export ROLLUP_CONFIG=${realpath ./op-program/chainconfig/configs/100011-rollup.json}
-export L2_GENESIS=${realpath ./op-program/chainconfig/configs/100011-genesis-l2.json}
+export ROLLUP_CONFIG=$(realpath ./op-program/chainconfig/configs/100011-rollup.json)
+export L2_GENESIS=$(realpath ./op-program/chainconfig/configs/100011-genesis-l2.json)
 ```
 
 ## Config firewall
