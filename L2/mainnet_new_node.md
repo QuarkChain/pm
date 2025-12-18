@@ -59,7 +59,7 @@ mkdir safedb
   --rollup.disabletxpoolgossip \
   --rollup.sequencerhttp=http://sequencer.mainnet.l2.quarkchain.io:8545 \
   --rollup.enabletxpooladmission \
-  --bootnodes enode://d50aa6776bef2345b3492332595956771a19bbf35803bc64574aa130b8d4e779b64782b42abc9194ae47ae05c0850372501cc563f3e61dd188ec868446a216d6@65.109.115.36:30303 2>&1 | tee -a geth.log -i
+  --bootnodes enr:-Iq4QHDZj97UJRbrA42Zkj0fCl86U2Px6Kg-Ln7GgX2bQwodYvVSL2yGCc7GPjYO6uh02tgRThzTWt2kVrTD9qNJyxKGAZsw_eBngmlkgnY0gmlwhDQrqXmJc2VjcDI1NmsxoQNjZchkcwwFlThXNio7z_J4g7ao88vjjBxqFKSggJdMCIN1ZHCCjh8 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
 Locate the sequencer's peer ID and replace it in the p2p.static option:
@@ -73,7 +73,7 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
-  --p2p.no-discovery \
+  --p2p.bootnodes enr:-Iq4QEITWz_NGkcsTCSddBrsLg6opb7kHw6Ro6byQFQ2eq3iVCWj7IXw4osLC5_OnZo04KGVVvloSo5jmsBcLIuwcT2GAZsw_u-0gmlkgnY0gmlwhDQrqXmJc2VjcDI1NmsxoQJZIwhj9y6rGsyosceDxSnTtO_60d4cuWn30mzstjbNXIN1ZHCCJoc \
   --p2p.sync.onlyreqtostatic \
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
@@ -108,7 +108,7 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --rollup.disabletxpoolgossip \
   --rollup.sequencerhttp=https://rpc.mainnet.l2.quarkchain.io:8545 \
   --rollup.enabletxpooladmission \
-  --bootnodes enode://bc2e38b31df9ce699ad492c8598c4a9d63c5600582a61b4bcecf2b52d394338da52fc1d9cd4ae696e6624f5106ce7ca41b643c072a96beb9c880c78aa0cb00a9@65.109.69.90:30303 2>&1 | tee -a geth.log -i
+  --bootnodes enr:-Iq4QHDZj97UJRbrA42Zkj0fCl86U2Px6Kg-Ln7GgX2bQwodYvVSL2yGCc7GPjYO6uh02tgRThzTWt2kVrTD9qNJyxKGAZsw_eBngmlkgnY0gmlwhDQrqXmJc2VjcDI1NmsxoQNjZchkcwwFlThXNio7z_J4g7ao88vjjBxqFKSggJdMCIN1ZHCCjh8 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
 Replace the public node's peer ID in the p2p.static option:
@@ -118,12 +118,10 @@ Replace the public node's peer ID in the p2p.static option:
   --verifier.l1-confs=4 \
   --rollup.config=./mainnet_rollup.json \
   --rpc.port=8547 \
-  --p2p.static=/ip4/65.109.69.90/tcp/9003/p2p/16Uiu2HAkxLJCHidwuTfyW2bS9W89tTHoFaE3UGUNnWFf3xSUHZv1 \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
-  --p2p.no-discovery \
-  --p2p.sync.onlyreqtostatic \
+  --p2p.bootnodes enr:-Iq4QEITWz_NGkcsTCSddBrsLg6opb7kHw6Ro6byQFQ2eq3iVCWj7IXw4osLC5_OnZo04KGVVvloSo5jmsBcLIuwcT2GAZsw_u-0gmlkgnY0gmlwhDQrqXmJc2VjcDI1NmsxoQJZIwhj9y6rGsyosceDxSnTtO_60d4cuWn30mzstjbNXIN1ZHCCJoc \
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
   --l1.beacon=$L1_BEACON_URL \
@@ -158,7 +156,7 @@ Replace the public node's peer ID in the p2p.static option:
   --rollup.disabletxpoolgossip \
   --rollup.sequencerhttp=https://rpc.mainnet.l2.quarkchain.io:8545 \
   --rollup.enabletxpooladmission \
-  --bootnodes enode://bc2e38b31df9ce699ad492c8598c4a9d63c5600582a61b4bcecf2b52d394338da52fc1d9cd4ae696e6624f5106ce7ca41b643c072a96beb9c880c78aa0cb00a9@65.109.69.90:30303 2>&1 | tee -a geth.log -i
+  --bootnodes enr:-Iq4QHDZj97UJRbrA42Zkj0fCl86U2Px6Kg-Ln7GgX2bQwodYvVSL2yGCc7GPjYO6uh02tgRThzTWt2kVrTD9qNJyxKGAZsw_eBngmlkgnY0gmlwhDQrqXmJc2VjcDI1NmsxoQNjZchkcwwFlThXNio7z_J4g7ao88vjjBxqFKSggJdMCIN1ZHCCjh8 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
 Replace the public node's peer ID in the p2p.static option:
@@ -168,12 +166,10 @@ Replace the public node's peer ID in the p2p.static option:
   --verifier.l1-confs=4 \
   --rollup.config=./mainnet_rollup.json \
   --rpc.port=8547 \
-  --p2p.static=/ip4/65.109.69.90/tcp/9003/p2p/16Uiu2HAkxLJCHidwuTfyW2bS9W89tTHoFaE3UGUNnWFf3xSUHZv1 \
   --p2p.listen.ip=0.0.0.0 \
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
-  --p2p.no-discovery \
-  --p2p.sync.onlyreqtostatic \
+  --p2p.bootnodes enr:-Iq4QEITWz_NGkcsTCSddBrsLg6opb7kHw6Ro6byQFQ2eq3iVCWj7IXw4osLC5_OnZo04KGVVvloSo5jmsBcLIuwcT2GAZsw_u-0gmlkgnY0gmlwhDQrqXmJc2VjcDI1NmsxoQJZIwhj9y6rGsyosceDxSnTtO_60d4cuWn30mzstjbNXIN1ZHCCJoc \
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
   --l1.beacon=$L1_BEACON_URL \
