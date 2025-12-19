@@ -4,7 +4,7 @@
 
 # Build devp2p
 ```bash
-git clone -b prepare_for_bootnode https://github.com/QuarkChain/op-geth.git
+git clone -b bootnode https://github.com/QuarkChain/op-geth.git
 cd op-geth && go build -o ./build/bin/devp2p ./cmd/devp2p
 ```
 
