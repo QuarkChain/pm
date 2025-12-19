@@ -81,7 +81,7 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --l1.beacon-archiver=https://archive.mainnet.ethstorage.io:9645 \
   --l1.cache-size=0 \
   --safedb.path=safedb \
-  --syncmode=execution-layer | tee -a node.log -i
+  --syncmode=execution-layer 2>&1 | tee -a node.log -i
 ```
 
 ## Launch a Snap Sync Node
@@ -128,7 +128,7 @@ Replace the public node's peer ID in the p2p.static option:
   --l1.beacon-archiver=https://archive.mainnet.ethstorage.io:9645 \
   --l1.cache-size=0 \
   --safedb.path=safedb \
-  --syncmode=execution-layer | tee -a node.log -i
+  --syncmode=execution-layer 2>&1 | tee -a node.log -i
 ```
 
 ## Launch an Archive Node using EL Sync
@@ -176,4 +176,4 @@ Replace the public node's peer ID in the p2p.static option:
   --l1.beacon-archiver=https://archive.mainnet.ethstorage.io:9645 \
   --l1.cache-size=0 \
   --safedb.path=safedb \
-  --syncmode=execution-layer | tee -a node.log -i
+  --syncmode=execution-layer 2>&1 | tee -a node.log -i
