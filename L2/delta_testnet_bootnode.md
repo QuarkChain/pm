@@ -45,6 +45,12 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
   --opstack-chainid 110011 2>&1 | tee -a boot-opnode.log -i
 ```
 
+# Firewall config
+```
+sudo ufw allow 36383/udp
+sudo ufw allow 9863/udp
+```
+
 # Future work
 [bootnodoor](https://github.com/ethpandaops/bootnodoor) is a project maintained by EthPandaOps. It supports both the execution layer (EL) and consensus layer (CL), and includes features such as DoS protection and fork-aware peer filtering. It looks promising, and we can monitor its development in case it becomes useful for us in the future.
 
