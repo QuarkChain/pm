@@ -91,7 +91,6 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
 ## Launch a Snap Sync Node
 
 ### 1. Launch op-geth (snap sync)
- - Replace the public node's enode URL in the bootnodes option
  - Set the public node's HTTP endpoint (rollup.sequencerhttp)
 ```bash
 export PUBLIC_IP=<YOUR_PUBLIC_IP>
@@ -117,7 +116,6 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
   --rollup.enabletxpooladmission 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
-Replace the public node's peer ID in the p2p.static option:
 ```bash
 export PUBLIC_IP=<YOUR_PUBLIC_IP>
 
@@ -141,8 +139,7 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
 
 ## Launch an Archive Node using EL Sync
 ### 1. Launch op-geth (full sync, archive)
- - Set the sequencer's HTTP endpoint (rollup.sequencerhttp)
- - Configure firewall rules to restrict this node access to the sequencer (http RPC)
+ - Set the public node's HTTP endpoint (rollup.sequencerhttp)
 ```bash
 export PUBLIC_IP=<YOUR_PUBLIC_IP>
 
@@ -169,7 +166,6 @@ export PUBLIC_IP=<YOUR_PUBLIC_IP>
   --rollup.enabletxpooladmission 2>&1 | tee -a geth.log -i
 ```
 ### 2. Launch op-node (syncmode=execution-layer)
-Replace the public node's peer ID in the p2p.static option:
 ```bash
 export PUBLIC_IP=<YOUR_PUBLIC_IP>
 
