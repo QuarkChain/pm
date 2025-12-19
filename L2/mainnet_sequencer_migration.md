@@ -118,7 +118,7 @@ Make sure all the services in the previous sequencer are stopped.
   --l1.rpckind=standard \
   --l1.beacon=$L1_BEACON_URL \
   --l1.cache-size=0 \
-  --l1.beacon-archiver=http://sequencer.mainnet.l2.quarkchain.io:8545 \
+  --l1.beacon-archiver=https://archive.mainnet.ethstorage.io:9645 \
   --safedb.path=safedb 2>&1 | tee -a node.log -i
 ```
 
