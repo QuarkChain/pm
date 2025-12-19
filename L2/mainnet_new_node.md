@@ -39,6 +39,8 @@ mkdir safedb
  - Set the sequencer's HTTP endpoint (rollup.sequencerhttp)
  - Configure firewall rules to restrict this node access to the sequencer (http RPC)
 ```bash
+export PUBLIC_IP=<YOUR_PUBLIC_IP>
+
 ./build/bin/geth --datadir ./datadir \
   --http \
   --http.corsdomain="*" \
@@ -50,6 +52,7 @@ mkdir safedb
   --ws.port=8546 \
   --ws.origins="*" \
   --ws.api=eth,txpool,net \
+  --nat="extip:${PUBLIC_IP}" \
   --syncmode=full \
   --gcmode=archive \
   --networkid=100011 \
@@ -64,6 +67,8 @@ mkdir safedb
 ### 2. Launch op-node (syncmode=execution-layer)
 Locate the sequencer's peer ID and replace it in the p2p.static option:
 ```bash
+export PUBLIC_IP=<YOUR_PUBLIC_IP>
+
 ./bin/op-node --l2=http://localhost:8551 \
   --l2.jwt-secret=./jwt.txt \
   --verifier.l1-confs=4 \
@@ -74,6 +79,7 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
   --p2p.bootnodes enr:-Iq4QEITWz_NGkcsTCSddBrsLg6opb7kHw6Ro6byQFQ2eq3iVCWj7IXw4osLC5_OnZo04KGVVvloSo5jmsBcLIuwcT2GAZsw_u-0gmlkgnY0gmlwhDQrqXmJc2VjcDI1NmsxoQJZIwhj9y6rGsyosceDxSnTtO_60d4cuWn30mzstjbNXIN1ZHCCJoc \
+  --p2p.advertise.ip=$PUBLIC_IP \
   --p2p.sync.onlyreqtostatic \
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
@@ -90,6 +96,8 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
  - Replace the public node's enode URL in the bootnodes option
  - Set the public node's HTTP endpoint (rollup.sequencerhttp)
 ```bash
+export PUBLIC_IP=<YOUR_PUBLIC_IP>
+
 ./build/bin/geth --datadir ./datadir   \
   --http \
   --http.corsdomain="*" \
@@ -101,6 +109,7 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
   --ws.port=8546 \
   --ws.origins="*" \
   --ws.api=eth,txpool,net \
+  --nat="extip:${PUBLIC_IP}" \
   --networkid=100011 \
   --authrpc.vhosts="*" \
   --authrpc.port=8551 \
@@ -113,6 +122,8 @@ Locate the sequencer's peer ID and replace it in the p2p.static option:
 ### 2. Launch op-node (syncmode=execution-layer)
 Replace the public node's peer ID in the p2p.static option:
 ```bash
+export PUBLIC_IP=<YOUR_PUBLIC_IP>
+
 ./bin/op-node --l2=http://localhost:8551 \
   --l2.jwt-secret=./jwt.txt \
   --verifier.l1-confs=4 \
@@ -122,6 +133,7 @@ Replace the public node's peer ID in the p2p.static option:
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
   --p2p.bootnodes enr:-Iq4QEITWz_NGkcsTCSddBrsLg6opb7kHw6Ro6byQFQ2eq3iVCWj7IXw4osLC5_OnZo04KGVVvloSo5jmsBcLIuwcT2GAZsw_u-0gmlkgnY0gmlwhDQrqXmJc2VjcDI1NmsxoQJZIwhj9y6rGsyosceDxSnTtO_60d4cuWn30mzstjbNXIN1ZHCCJoc \
+  --p2p.advertise.ip=$PUBLIC_IP \
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
   --l1.beacon=$L1_BEACON_URL \
@@ -136,6 +148,8 @@ Replace the public node's peer ID in the p2p.static option:
  - Set the sequencer's HTTP endpoint (rollup.sequencerhttp)
  - Configure firewall rules to restrict this node access to the sequencer (http RPC)
 ```bash
+export PUBLIC_IP=<YOUR_PUBLIC_IP>
+
 ./build/bin/geth --datadir ./datadir \
   --http \
   --http.corsdomain="*" \
@@ -147,6 +161,7 @@ Replace the public node's peer ID in the p2p.static option:
   --ws.port=8546 \
   --ws.origins="*" \
   --ws.api=eth,txpool,net \
+  --nat="extip:${PUBLIC_IP}" \
   --syncmode=full \
   --gcmode=archive \
   --networkid=100011 \
@@ -161,6 +176,8 @@ Replace the public node's peer ID in the p2p.static option:
 ### 2. Launch op-node (syncmode=execution-layer)
 Replace the public node's peer ID in the p2p.static option:
 ```bash
+export PUBLIC_IP=<YOUR_PUBLIC_IP>
+
 ./bin/op-node --l2=http://localhost:8551 \
   --l2.jwt-secret=./jwt.txt \
   --verifier.l1-confs=4 \
@@ -170,6 +187,7 @@ Replace the public node's peer ID in the p2p.static option:
   --p2p.listen.tcp=9003 \
   --p2p.listen.udp=9003 \
   --p2p.bootnodes enr:-Iq4QEITWz_NGkcsTCSddBrsLg6opb7kHw6Ro6byQFQ2eq3iVCWj7IXw4osLC5_OnZo04KGVVvloSo5jmsBcLIuwcT2GAZsw_u-0gmlkgnY0gmlwhDQrqXmJc2VjcDI1NmsxoQJZIwhj9y6rGsyosceDxSnTtO_60d4cuWn30mzstjbNXIN1ZHCCJoc \
+  --p2p.advertise.ip=$PUBLIC_IP \
   --l1=$L1_RPC_URL \
   --l1.rpckind=$L1_RPC_KIND \
   --l1.beacon=$L1_BEACON_URL \
