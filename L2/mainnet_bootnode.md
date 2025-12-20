@@ -29,3 +29,5 @@ enr:-Iq4QI5ZklSPoQ3v5i6_pDAYLIJ4SMXEqzej0TqfVAzIom4NXV8qc-t_t0yI9h4R-6o583AlMQQH
 # op-node
 enr:-Iq4QPdFZPwpzDKV5QkoeA7dc8XuANDcj0KBkwlvKo5OHnv7Wkm21sjLYCjVQMzsWEl5N4tFbAR4_0qR_AspVf5zbDSGAZs1cZP-gmlkgnY0gmlwhI_0x9iJc2VjcDI1NmsxoQOhAtKoJkA5HlcgqKfKKYW7envKQMfd6pPHNb8y2Fb_q4N1ZHCCJoc
 ```
+
+> Note: On DigitalOcean, even if you attach a Reserved IP, outbound UDP traffic will still use the Droplet’s primary public IP by default. To force outbound traffic to use the Reserved IP, you need to configure the gateway as described in this guide: https://docs.digitalocean.com/products/networking/reserved-ips/how-to/outbound-traffic/
