@@ -31,7 +31,7 @@ cd ..
 
 ## Migrate credientials
  - Add the following environment variables to optimism/.envrc
- - Make sure every referenced file exists (especially TLS certs/keys).
+ - Make sure every referenced file exists (especially TLS certs/keys) using ./L2/scripts/check_paths.sh.
 ``` bash
 export SEQUENCER_PRIVATE_KEY=
 export L1_RPC_URL=
@@ -41,18 +41,18 @@ export SIGNER_ENDPOINT=
 export BATCHER_ADDR=
 export BATCHER_CA_CRT=
 export BATCHER_TLS_CRT=
-export BATCHER_TLS_KET=
+export BATCHER_TLS_KEY=
 
 export PROPOSER_ADDR=
 export PROPOSER_CA_CRT=
 export PROPOSER_TLS_CRT=
-export PROPOSER_TLS_KET=
+export PROPOSER_TLS_KEY=
 export GAME_FACTORY_ADDR=
 
 export CHALLENGER_ADDR=
 export CHALLENGER_CA_CRT=
 export CHALLENGER_TLS_CRT=
-export CHALLENGER_TLS_KET=
+export CHALLENGER_TLS_KEY=
 
 export ROLLUP_CONFIG=$(realpath ./op-program/chainconfig/configs/100011-rollup.json)
 export L2_GENESIS=$(realpath ./op-program/chainconfig/configs/100011-genesis-l2.json)
@@ -139,7 +139,7 @@ Make sure all the services in the previous sequencer are stopped.
   --signer.address $BATCHER_ADDR \
   --signer.tls.ca $BATCHER_CA_CRT \
   --signer.tls.cert $BATCHER_TLS_CRT \
-  --signer.tls.key $BATCHER_TLS_KET \
+  --signer.tls.key $BATCHER_TLS_KEY \
   --signer.tls.enabled \
   --data-availability-type blobs \
   --batch-type=1 \
@@ -160,7 +160,7 @@ Make sure all the services in the previous sequencer are stopped.
   --signer.address $PROPOSER_ADDR \
   --signer.tls.ca $PROPOSER_CA_CRT \
   --signer.tls.cert $PROPOSER_TLS_CRT \
-  --signer.tls.key $PROPOSER_TLS_KET \
+  --signer.tls.key $PROPOSER_TLS_KEY \
   --signer.tls.enabled \
   --l1-eth-rpc=$L1_RPC_URL 2>&1 | tee -a proposer.log -i
 ```
@@ -181,7 +181,7 @@ bin/op-challenger --l1-eth-rpc $L1_RPC_URL \
   --signer.address $CHALLENGER_ADDR \
   --signer.tls.ca $CHALLENGER_CA_CRT \
   --signer.tls.cert $CHALLENGER_TLS_CRT \
-  --signer.tls.key $CHALLENGER_TLS_KET \
+  --signer.tls.key $CHALLENGER_TLS_KEY \
   --signer.tls.enabled \
   --cannon-rollup-config $ROLLUP_CONFIG \
   --cannon-l2-genesis $L2_GENESIS \
@@ -191,7 +191,9 @@ bin/op-challenger --l1-eth-rpc $L1_RPC_URL \
   --unsafe-allow-invalid-prestate 2>&1 | tee -a challenger.log -i
 ```
 6. BLOB data server (optional)
-Start this only if L2 BLOB is enabled
+ - Start this only if L2 BLOB is enabled
+ - `da-server` has a trusted "SequencerIP" config, we'll need to modify it if we migrated BLOB data server. 
+ - We'll need to setup at least 2 instances for recovery.
 
 ## Config DNS
  - Update sequencer.mainnet.l2.quarkchain.io to the new IP
