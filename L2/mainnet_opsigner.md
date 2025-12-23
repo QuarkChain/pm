@@ -15,7 +15,8 @@ make
 ```
 
 ## Copy server TLS assets
-Copy the CA/TLS files in the tls-server folder to the new server.
+ - Copy the CA/TLS files in the tls-server folder to the new server.
+ - Change file permission: `chmod 600 ./tls-server/*`
 ```bash
 tls-server
 ├── ca.crt
@@ -32,6 +33,7 @@ tls-server
 
  - Copy the Google service account JSON to the new server, then add the following to infra/op-signer/.envrc
  - Active the .envrc file: `source .envrc` or `direnv allow`
+ - Change file permission: `chmod 600 $GOOGLE_APPLICATION_CREDENTIALS`
 
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS="<PATH_TO_SERVICE_ACCOUNT_JSON_FILE>"
