@@ -74,4 +74,4 @@ sudo ufw allow from <SEQUENCER_IP> to any port 8080 proto tcp
 
 # Switch to production op-signer service
  - Update DNS for op-signer.mainnet.l2.quarkchain.io to point to the new server.
- - Restart batcher / proposer / challenger. The op-signer service caches the IP address of op-signer.mainnet.l2.quarkchain.io, so a service restart is required for the DNS change to take effect.
+ - Restart the batcher, proposer, and challenger after confirming the DNS change has taken effect. The op-signer service caches the resolved IP for op-signer.mainnet.l2.quarkchain.io, so a restart is required for it to pick up the updated DNS record. 
