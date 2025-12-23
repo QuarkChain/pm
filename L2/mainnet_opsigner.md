@@ -64,11 +64,11 @@ From the op-signer folder:
 ```
 
 ## Config firewall
-Allow only the sequencer to reach the signer (port 8080/tcp):
+Allow only the sequencer IP to reach the signer (port 8080/tcp):
 ```bash
 sudo ufw allow from <SEQUENCER_IP> to any port 8080 proto tcp
 ```
 
 # Switch to production op-signer service
  - Update DNS for op-signer.mainnet.l2.quarkchain.io to point to the new server.
- - Restart batcher / proposer / challenger
+ - Restart batcher / proposer / challenger. The op-signer service caches the IP address of op-signer.mainnet.l2.quarkchain.io, so a service restart is required for the DNS change to take effect.
