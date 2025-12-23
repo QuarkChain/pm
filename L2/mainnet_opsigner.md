@@ -30,7 +30,8 @@ tls-server
 
 ## Configure google API credentials
 
-Copy the Google service account JSON to the new server, then add the following to infra/op-signer/.envrc
+ - Copy the Google service account JSON to the new server, then add the following to infra/op-signer/.envrc
+ - Active the .envrc file: `source .envrc` or `direnv allow`
 
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS="<PATH_TO_SERVICE_ACCOUNT_JSON_FILE>"
