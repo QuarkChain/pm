@@ -1,7 +1,7 @@
 # Set up op-signer
 Follow this [guide](https://github.com/QuarkChain/pm/blob/main/op-signer.md) to set up a new op-signer service.
 
-# Set up a second op-signer as backup
+# Set up a second op-signer
 
 ## Build from source
 
@@ -14,19 +14,24 @@ cd infra/op-signer
 make
 ```
 
-## Copy server TLS assets
- - Copy the CA/TLS files in the tls-server folder to the new server.
+## Copy CA credentials
+ - Copy the CA files in the tls-server folder to the new server.
  - Change file permission: `chmod 600 ./tls-server/*`
 ```bash
 tls-server
 ├── ca.crt
 ├── ca.key
 ├── ca.srl
-├── tls.crt
-└── tls.key
 ```
 > ⚠️ **Note:** 
 > If the CA private key (ca.key) is compromised, an attacker can issue certificates that will be trusted by the system.
+
+## Generate server TLS assets
+ - Run the following command to generate server TLS.
+ - Add a new DNS record for `op-signer2.mainnet.l2.quarkchain.io` to point to the new server 
+```bash
+./tls.sh server op-signer2.mainnet.l2.quarkchain.io
+```
 
 
 ## Configure google API credentials
@@ -73,5 +78,4 @@ sudo ufw allow from <SEQUENCER_IP> to any port 8080 proto tcp
 ```
 
 # Switch to production op-signer service
- - Update DNS for op-signer.mainnet.l2.quarkchain.io to point to the new server.
- - Restart the batcher, proposer, and challenger after confirming the DNS change has taken effect. The op-signer service caches the resolved IP for op-signer.mainnet.l2.quarkchain.io, so a restart is required for it to pick up the updated DNS record. 
+After confirming the DNS change has taken effect, restart the batcher, proposer, and challenger service with the new endpoint (op-signer2.mainnet.l2.quarkchain.io) flag.
