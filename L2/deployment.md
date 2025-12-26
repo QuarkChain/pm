@@ -22,7 +22,7 @@ Mainnet admin wallets
  ## 3. Prepare op-signer service for batcher, proposer and challenger
  - Setup op-signer service for op-proposer/op-batcher/op-challenger (https://github.com/QuarkChain/pm/blob/main/op-signer.md)
  - Fund each signer with ETH. (Setup wallet monitor to watch the balance later)
- - Prepare the [remote_signer.json](https://github.com/QuarkChain/pm/blob/main/L2/assets/remote_signer.json) that will be used in opup
+ - Prepare the remote_signer.json file to be used in opup. You can use this [template](https://github.com/QuarkChain/pm/blob/main/L2/assets/delta_remote_signer.json) as a reference and adjust it according to your environment.
 
  ## 4. Prepare deployer and sequencer wallet
  - Fund deployer with ETH
