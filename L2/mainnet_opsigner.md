@@ -22,11 +22,16 @@ tls-server
 ├── ca.crt
 ├── ca.key
 ├── ca.srl
+├── tls.crt
+└── tls.key
 ```
 > ⚠️ **Note:** 
 > If the CA private key (ca.key) is compromised, an attacker can issue certificates that will be trusted by the system.
 
-## Generate server TLS assets
+## Generate server TLS assets (optional)
+If you’re setting up **failover under the same domain** (e.g., op-signer.mainnet.l2.quarkchain.io), **skip this step**.
+
+If you want to use a second domain for the backup service:
  - Run the following command to generate server TLS.
  - Add a new DNS record for `op-signer2.mainnet.l2.quarkchain.io` to point to the new server 
 ```bash
@@ -77,5 +82,14 @@ Allow only the sequencer IP to reach the signer (port 8080/tcp):
 sudo ufw allow from <SEQUENCER_IP> to any port 8080 proto tcp
 ```
 
-# Switch to production op-signer service
-After confirming the DNS change has taken effect, restart the batcher, proposer, and challenger service with the new endpoint (op-signer2.mainnet.l2.quarkchain.io) flag.
+# Switch to production
+## Option A: Failover using the same domain (Route 53 DNS failover)
+ - Create a Route 53 health check for the primary and secondary op-signer endpoints.
+ - Configure email notifications (via CloudWatch alarm + SNS) so the team is alerted when the health check fails.
+ - Create two Route 53 records for the same hostname (e.g., op-signer.mainnet.l2.quarkchain.io):
+   - Primary record → primary server IP + attach the health check
+   - Secondary record → backup server IP
+ - When Route 53 detects the primary is unhealthy, it will automatically fail over the hostname to the secondary IP.
+## Option B: Use a second domain for the backup op-signer
+If you deploy the backup signer on a separate hostname (e.g., op-signer2.mainnet.l2.quarkchain.io):
+ - After confirming DNS is in effect, restart op-batcher, op-proposer, and op-challenger with the new --signer.endpoint (or equivalent) pointing to op-signer2.mainnet.l2.quarkchain.io.
