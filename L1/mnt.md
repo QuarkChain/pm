@@ -243,7 +243,34 @@ The chain halts at a designated block. A state export tool reads the final state
 - Non-default token balances are lost (same as Option A)
 - In-flight cross-shard deposits at the cutoff block need a policy decision (drop or convert)
 
-### Option C: Disable Without Removal (Feature Flag)
+### Option C: Hard Fork + Snapshot Migration (Optimism Bedrock Model)
+
+This is the approach Optimism took for the Bedrock upgrade. Instead of requiring all nodes to sync from genesis (Option A) or restarting the chain from block 0 (Option B), you:
+
+1. Perform an in-place state migration at a fork block (like Option A)
+2. Publish a **full database snapshot** at the fork height — this includes **all historical blocks, transaction receipts (containing event logs), and the migrated state**. This is NOT just a state snapshot; it's the entire chain database. (Optimism's snapshot is ~14TB for this reason.)
+3. New nodes sync from the snapshot — they do **not** re-execute pre-fork blocks
+4. Pre-fork blocks are served read-only: `eth_getBlock`, `eth_getTransactionReceipt`, `eth_getLogs` all work because the block and receipt data is in the snapshot. However, `eth_call` against pre-fork blocks fails because the new node doesn't have the old EVM to re-execute them.
+5. For full archive capability (including `eth_call` on old blocks), operators run a separate **frozen legacy binary** alongside the new node
+
+**Pros:**
+- Chain history (blocks, transactions) is **preserved in read-only form** — explorers can still show old TXs
+- The new codebase has **zero MNT code** — old EVM code only lives in the frozen legacy binary, which is never maintained again
+- No chain restart ceremony — operators just upgrade the binary and (optionally) download the snapshot
+- Future EVM upgrades only touch one code path (same as Option B)
+
+**Cons:**
+- Full sync from genesis is no longer possible — the full database snapshot is mandatory for new nodes
+- `eth_call` / `eth_estimateGas` against pre-fork blocks fails unless operators also run the legacy binary
+- The snapshot is the **entire chain database** (all blocks + receipts + state), not just state — hosting and downloading it is a significant infrastructure cost
+- Non-default token balances are still dropped (same as A and B)
+- The frozen legacy binary is a piece of infrastructure to maintain (but it never changes — just needs to keep running)
+
+**Key advantage over Option A:** The old EVM code is in a separate frozen binary, not in the main codebase. You never need to port MNT changes to new EVM versions.
+
+**Key advantage over Option B:** Chain history is preserved — explorers and wallets can still show old transactions. No "blank history" problem.
+
+### Option D: Disable Without Removal (Feature Flag)
 
 Add a validation rule at a fork height that rejects any transaction with non-default `gas_token_id` or `transfer_token_id`. The account state format is unchanged; the feature simply stops being usable.
 
@@ -258,17 +285,20 @@ Add a validation rule at a fork height that rejects any transaction with non-def
 
 ### Comparison Table
 
-| | Option A: Hard Fork Migration | Option B: Regenesis | Option C: Feature Flag |
-|---|---|---|---|
-| Chain history preserved | Yes | No | Yes |
-| MNT code fully removable | **No** (needed for historical sync) | **Yes** | No |
-| EVM upgrade simplified | **No** | **Yes** | No |
-| State migration required | Yes (in-consensus) | Yes (offline tool) | No |
-| Operator coordination burden | Low (binary upgrade) | High (ceremony) | Low |
-| Explorer impact | None | High | None |
-| Long-term maintenance | High | Low | High |
+| | Option A: Hard Fork Migration | Option B: Regenesis | Option C: Snapshot Migration (Bedrock Model) | Option D: Feature Flag |
+|---|---|---|---|---|
+| Chain history preserved | Yes | No | Yes (read-only) | Yes |
+| Pre-fork `eth_call` support | Yes | No | Only with legacy binary | Yes |
+| MNT code fully removable | **No** (needed for historical sync) | **Yes** | **Yes** (old code frozen in legacy binary) | No |
+| EVM upgrade simplified | **No** | **Yes** | **Yes** | No |
+| State migration required | Yes (in-consensus) | Yes (offline tool) | Yes (in-consensus + snapshot publish) | No |
+| Full sync from genesis | Yes | N/A (new chain) | **No** (snapshot required) | Yes |
+| Operator coordination burden | Low (binary upgrade) | High (ceremony) | Medium (upgrade + optional snapshot download) | Low |
+| Explorer impact | None | High (blank history) | Low (history preserved read-only) | None |
+| Long-term maintenance | High | Low | Low | High |
+| Archive infrastructure | None | Old binary + old chain data | Old binary (frozen) + snapshot hosting | None |
 
-**Conclusion**: If the goal is to simplify the EVM upgrade and reduce long-term maintenance, only **Option B (Regenesis)** achieves it. Options A and C both leave MNT code permanently in the codebase.
+**Conclusion**: Options B (Regenesis) and C (Snapshot Migration) both achieve the goal of removing MNT code from the active codebase and simplifying future EVM upgrades. Option C (the Optimism Bedrock model) offers the additional benefit of preserving chain history in read-only form, at the cost of requiring a published snapshot and optional legacy binary for full archive support. Option C is the recommended approach if chain history has value to users and ecosystem partners.
 
 ---
 
@@ -335,30 +365,41 @@ After the UST depeg event, Terra performed a full regenesis to a new chain.
 **Pros:** Clean break; new chain started without technical debt
 **Cons:** Community split; old chain (LUNC) had its own political complications; user confusion between LUNA (new) and LUNC (old) persists to this day
 
-#### Optimism (Bedrock Upgrade, 2023) — *Not a true regenesis*
+#### Optimism (Bedrock Upgrade, 2023) — *State snapshot migration*
 
-Optimism upgraded from the legacy codebase to Bedrock in June 2023. This is often cited as a migration example but is actually closer to **Option A (in-place migration)**:
+> **Reference**: [Optimism Node Operator Docs — Run Node from Source](https://docs.optimism.io/node-operators/tutorials/run-node-from-source#op-mainnet-archive-nodes)
+
+Optimism upgraded from the legacy codebase to Bedrock in June 2023. This is often cited as a seamless in-place migration, but in practice it relies on a **pre-migrated state snapshot** — a true full sync from genesis is not possible.
 
 **Steps taken:**
 1. The legacy sequencer stopped accepting transactions at a specific L2 block
-2. The Bedrock sequencer re-derived the entire L2 history from L1 calldata (since all L2 data is stored on L1)
-3. The new Bedrock sequencer continued from the same L2 state
-4. History was preserved because Optimism's architecture allows re-deriving state from L1
+2. A "large database migration" restructured the entire chain database into the Bedrock format
+3. The Bedrock node started from this **migrated snapshot** — not by re-executing historical blocks
+4. Pre-Bedrock blocks are **served** (read-only) but **cannot be re-executed** by modern nodes — queries like `eth_call` against pre-Bedrock blocks will fail
 
-**Why this was possible:** In pre-Bedrock Optimism, L2 transaction data and L2 state roots were posted to **separate** L1 contracts — the Canonical Transaction Chain (CTC) for transactions and the State Commitment Chain (SCC) for state roots. Since the state roots were not embedded in the transaction calldata itself (they were just independently-posted claims enforced by fraud proofs), the new Bedrock node could re-execute all historical transactions with a completely different EVM and compute **new state roots** — the old SCC roots were simply discarded.
+**Archive node reality:**
+- Archive nodes must download a pre-migrated database snapshot (~14TB as of June 2025)
+- **You cannot sync from genesis block 0** — the migration snapshot is required
+- The database migration **converted old block/receipt data into the new format** — so the modern node can decode and serve pre-Bedrock data natively. Verified on Optimism mainnet RPC (`mainnet.optimism.io`):
+  - `eth_getBlockByNumber("0x1")` — works, returns full block data for pre-Bedrock block #1
+  - `eth_getTransactionReceipt` — works, returns receipts with full event logs for pre-Bedrock TXs
+  - `eth_getLogs` with pre-Bedrock block range — works, returns decoded log entries
+  - `eth_call` against pre-Bedrock blocks — **fails**, because it requires re-executing the TX with the old EVM
+- To run stateful queries like `eth_call` against pre-Bedrock blocks, operators must run a separate **Legacy Geth** node alongside the modern node — this is the frozen old binary running in read-only mode
+- This is explicitly documented as "entirely optional and typically only useful for operators who want to run complete archive nodes"
 
-**Why this doesn't apply to QuarkChain:** On an L1, the state root is **embedded in the block header** as part of consensus. If you change the EVM (different gas costs → different state transitions → different state root), the re-computed state root won't match the one in the existing block header, and sync validation fails. There is no way to "discard" the old state roots without discarding the blocks themselves.
+**Key takeaway for QuarkChain:** Even Optimism — with its L2 architectural advantage — could not achieve a seamless migration. Archive nodes still require: (a) a pre-migrated snapshot and (b) a frozen legacy binary for full historical execution. This is essentially the same operational burden as QuarkChain's regenesis Option B, just packaged differently.
 
-**Pros (for Optimism):** Full history preserved, no user disruption
-**Cons:** Only possible because of L2 architecture where state roots are separated from block data; not applicable to L1 chains
+**Pros:** Block/TX history preserved in read-only form; no chain restart ceremony for non-archive nodes
+**Cons:** Full sync from genesis impossible; archive nodes need legacy binary + 14TB snapshot; pre-Bedrock `eth_call` requires running a separate frozen Legacy Geth node
 
 #### Summary Comparison
 
-| Chain | Year | Type | History Preserved | Community Impact |
-|-------|------|------|-------------------|-----------------|
-| Cosmos Hub (3→4) | 2021 | State migration restart | No (block history reset) | Low — archive node kept old history |
-| Terra → Terra 2.0 | 2022 | Full regenesis | No | High — chain split, community divided |
-| Optimism Bedrock | 2023 | In-place migration | Yes | Minimal — transparent to users |
+| Chain | Year | Type | History Preserved | Archive Node Requirement | Community Impact |
+|-------|------|------|-------------------|-------------------------|-----------------|
+| Cosmos Hub (3→4) | 2021 | State migration restart | No (block history reset) | Old binary for old chain history | Low — archive node kept old history |
+| Terra → Terra 2.0 | 2022 | Full regenesis | No | Old chain continues as Terra Classic | High — chain split, community divided |
+| Optimism Bedrock | 2023 | Snapshot migration | Read-only (no re-execution) | 14TB snapshot + frozen Legacy Geth for `eth_call` | Low — but full archive requires legacy binary |
 
 ---
 
@@ -379,12 +420,13 @@ Optimism upgraded from the legacy codebase to Bedrock in June 2023. This is ofte
 
 ### 5.2 Explorer Impact
 
-After regenesis, a user who queries their address on the block explorer will see:
-- **Balance**: correct (migrated)
-- **Nonce**: correct (migrated)
-- **Transaction history**: **empty** — all historical TXs are gone
+The severity of explorer impact depends on which migration option is chosen:
 
-This is deeply confusing — funds appear to have arrived from nowhere, with no transaction to explain them. Three approaches to handle this:
+**Option B (Regenesis):** A user querying their address sees correct balance and nonce, but **zero transaction history**. This is deeply confusing — funds appear to have arrived from nowhere.
+
+**Option C (Snapshot Migration / Bedrock Model):** A user querying their address sees their full transaction history (old blocks are served read-only). The main limitation is that `eth_call` against old blocks won't work unless the explorer runs a legacy binary — but most explorers don't need `eth_call` to display transaction history.
+
+For **Option B**, three approaches to mitigate the blank history problem:
 
 **Approach 1 — Run two separate explorers**
 Keep the old explorer running pointed at an archived read-only node. New explorer serves only the new chain. Users must know to check both. Permanent operational cost.
@@ -394,6 +436,8 @@ A single explorer that routes historical queries to the archived old-chain node 
 
 **Approach 3 — Import old history as read-only archive**
 Migrate old block and TX data into the new explorer's database as immutable archive records, clearly labeled "pre-regenesis." Users see complete history in one place. Highest engineering effort but best user experience.
+
+**For Option C**, the explorer largely works as-is — old blocks and transactions are still available from the new node's RPC (served from the migrated snapshot). The only gap is that debug/trace APIs on old blocks may require the legacy binary. This is the approach Optimism took, and their explorer (Optimistic Etherscan) shows seamless history across the Bedrock boundary.
 
 ### 5.3 DApp Impact
 
@@ -406,20 +450,12 @@ Governance Vote events    → voting records
 NFT Transfer events       → provenance chain
 ```
 
-Any DApp calling `eth_getLogs` for pre-regenesis events will receive empty results. DApps must either:
+**Option B (Regenesis):** Any DApp calling `eth_getLogs` for pre-regenesis events will receive empty results. DApps must either:
 1. Point historical log queries to an archived old-chain RPC endpoint
 2. Accept that pre-regenesis history is unavailable
 3. Maintain their own database of historical events (indexed before regenesis)
 
-### 5.4 RPC Compatibility
-
-Wallets and integrations that rely on `eth_getTransactionByHash` or `eth_getTransactionReceipt` for pre-regenesis transactions will receive `null`. Any system that stored transaction hashes as receipts (e.g., exchange deposit tracking) will appear broken unless they maintain their own database or have access to the archive RPC.
-
-**Minimum viable archive infrastructure required:**
-- One read-only archive node running the old binary against the old chain data
-- Public RPC endpoint for the old chain
-- Explorer support (at minimum a link to the old explorer)
-- Documentation explaining the regenesis event
+**Option C (Snapshot Migration):** `eth_getLogs` for old blocks continues to work because event logs are stored in **transaction receipts** (part of block data, not the state trie), and the full database snapshot includes all historical blocks and receipts. The new node can serve this data read-only without needing the old EVM. This is a significant advantage for DApp continuity.
 
 ---
 
