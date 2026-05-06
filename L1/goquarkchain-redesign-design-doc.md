@@ -278,7 +278,7 @@ Reassigning the work currently done by each slave:
 | Tx pool | In-slave, forked | — | geth (unmodified) |
 | Block DB | In-slave, forked | — | geth (unmodified) |
 | Header validation (PoW) | In-slave | **In CL** | — |
-| PoSW decision | In-slave | **In CL** (reads data via new Engine API) | Exposes stake and recent coinbase-count data |
+| PoSW decision | In-slave | **In CL** (fetches stake via `eth_getBalance`, computes recentMineCount from its own block tree) | No PoSW-specific role (standard `eth_*` is sufficient) |
 | Difficulty adjustment | In-slave | **In CL** | — |
 | Fork choice for minor chain | In-slave (TD comparison in InsertChain) | **In CL**; communicates via `engine_forkchoiceUpdated` | Passive: switches canonical head on CL's instruction |
 | Root-triggered reorg cascade | In-slave (entangled) | **In CL** (pure orchestration via `engine_forkchoiceUpdated`) | geth's native state rewind |
@@ -347,20 +347,17 @@ Semantics:
 - `xshardDeposits` is applied as a pre-block balance credit, analogous to EIP-4895 `withdrawals`. No tx, no gas, no signature.
 - `xshardSends` is extracted from the predeployed `XshardSend` system contract's storage queue at end of block, analogous to EIP-7002 `withdrawalRequests`. The originating user transaction remains a first-class entry in `block.transactions`.
 
-#### New QKC-specific method
+#### PoSW data sourcing
 
-```
-engine_getPoSWInfoV1(
-  coinbaseAddress: Address,
-  blockNumber:     uint64
-) -> {
-  stake:           uint256,
-  recentMineCount: uint32,
-  poswWindowSize:  uint32,
-}
-```
+PoSW computation requires three inputs: the coinbase's stake balance at the parent block, the count of how many of the recent N blocks have that coinbase, and the protocol's PoSW window size. Each is sourced as follows:
 
-EL implements this by reading its own state trie (for stake) and walking its block DB (for recent coinbase counts). CL combines this with protocol parameters to compute the difficulty divider.
+- **`stake`**: fetched via standard `eth_getBalance(coinbase, parentBlockHash)`. Geth accepts a block hash as the second argument and returns the balance at that exact state.
+- **`recentMineCount`**: computed locally by CL. CL already maintains the canonical block tree (it drives fork choice and verifies PoW headers), so it has every block's coinbase. The count is computed by walking parents back N steps with an LRU cache of recent coinbases — the same pattern current QKC uses on the slave side ([posw.py:23-59](../quarkchain/cluster/posw.py#L23)), amortized O(1).
+- **`poswWindowSize`**: a chain config parameter, available to CL by definition.
+
+CL combines these with the other PoSW protocol parameters (`TOTAL_STAKE_PER_BLOCK`, `DIFF_DIVIDER`) to compute the effective difficulty for the block the miner is extending.
+
+A block hash rather than a block number is used as the state-of-reference because PoSW depends on which chain the miner is extending: at the same height there may be competing forks with different stake balances and different coinbase histories. This matches the convention of `eth_getBalance(addr, blockHash)` and every Engine API method that references a specific block.
 
 #### Use of `extraData` for root anchor
 
@@ -613,9 +610,10 @@ CL miner loop (runs continuously):
   # payload includes xshardSends extracted from the XshardSend contract
 
   # (3) Compute PoSW divider for this coinbase
-  { stake, recentMineCount, windowSize } =
-      engine_getPoSWInfoV1(coinbase, payload.blockNumber)
-  adjustedDifficulty = applyPoSW(payload.difficulty, stake, recentMineCount)
+  stake           = eth_getBalance(coinbase, payload.parentHash)        # standard JSON-RPC
+  recentMineCount = clBlockTree.countCoinbase(coinbase, payload.parentHash, windowSize)  # CL-local
+  windowSize      = config.poswWindowSize                                # config
+  adjustedDifficulty = applyPoSW(payload.difficulty, stake, recentMineCount, windowSize)
 
   # (4) Hand off to the local miner
   miner.setTemplate(payload, adjustedDifficulty)
@@ -682,7 +680,8 @@ Shard CL.HandleNewMinorBlock(peerId, block)
   │
   ├─ header-level validation in CL:
   │    - PoW verification
-  │    - difficulty verification (may call engine_getPoSWInfoV1)
+  │    - difficulty verification (CL fetches stake via eth_getBalance and
+  │      computes recentMineCount from its own block tree)
   │    - timestamp, parent hash, root anchor
   │
   ▼ (header valid)
@@ -939,9 +938,7 @@ Core methods (inherited from upstream, with QKC extensions to payload shapes):
 - `engine_getPayloadBodiesByHashV1/V2`, `engine_getPayloadBodiesByRangeV1/V2` — body retrieval for sync.
 - `engine_exchangeCapabilitiesV1`, `engine_getClientVersionV1` — handshake.
 
-QKC-specific additions:
-
-- `engine_getPoSWInfoV1(coinbase, blockNumber) -> { stake, recentMineCount, poswWindowSize }` — lets CL fetch the data needed to compute a PoSW difficulty divider.
+PoSW data is sourced via standard `eth_getBalance(coinbase, parentBlockHash)` plus CL-local computation (see §4.4).
 
 ### 8.2 Divergence Mapping
 
@@ -956,7 +953,7 @@ QKC-specific additions:
 | `hash_prev_root_block` | Dedicated header field | Encoded in standard `extraData` |
 | Block meta `xshard_tx_cursor_info` | Committed in header meta | Removed; cursor state in master |
 | `MinorBlockChain.InsertChain` | Execution + validation + fork choice + DB write entangled | Split across `engine_newPayload` (execute + store) and `engine_forkchoiceUpdated` (set head) |
-| PoSW computation | In slave's consensus engine | In CL, fed by `engine_getPoSWInfo` data query |
+| PoSW computation | In slave's consensus engine | In CL, fed by `eth_getBalance` (for stake) + CL-local block-tree walk (for recentMineCount) |
 | Wallet / RPC address format | 24-byte hex | Standard 20-byte hex |
 
 The net effect: divergences fall into a short list of well-scoped patches on geth (pre/post-block hooks, a system contract predeploy, and a data-query method) instead of the current broad modifications across the `core/`, `core/state/`, `core/vm/`, and `core/rawdb/` tree.
