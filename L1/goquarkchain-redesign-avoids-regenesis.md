@@ -1,8 +1,7 @@
-# GoQuarkChain Redesign — Primary Plan (Approach 3: Embedded geth -- Avoids Regenesis)
+# GoQuarkChain Redesign — Primary Plan (Embedded geth -- Avoids Regenesis)
 
 **Status**: Draft  
 **Date**: 2026-05-04  
-**Backup plan**: See `2026-05-04-goquarkchain-redesign-backup-plan2.md`
 
 ---
 
