@@ -16,12 +16,12 @@ This approach worked in 2018 but has become a strategic liability:
 
 1. **Each shard** runs as a pair of components: an **Execution Layer (EL)** that is near-unmodified upstream geth, and a **Consensus Layer (CL)** — a Go wrapper that talks to geth through the **Engine API**.
 2. **The master process** (root chain coordinator) remains **largely unchanged** from current GoQuarkChain.
-3. **Cross-shard transactions** are redesigned to mirror Ethereum's staking pattern: source-shard emissions use a **predeployed system contract** (EIP-7002 style) and destination-shard receipts use **pre-block balance patches** (EIP-4895 style). The EVM remains unaware of cross-shard semantics.
+3. **Cross-shard transactions** are redesigned to mirror Ethereum's staking pattern: source-shard emissions use a **predeployed system contract** (EIP-7002 style) and destination-shard receipts are applied by a **pre-block hook** that generalizes EIP-4895 — pure value transfers fall through to a balance credit, and EOA-to-contract xshard with calldata is preserved as a system-level CALL. The xshard payload flows source CL → destination CL directly; the root chain commits source mheaders for ordering but carries no xshard payload bytes (master is control plane only). The EVM proper remains unaware of cross-shard semantics.
 4. **Multi-native-token** is dropped. **Transaction format is aligned with standard Ethereum (EIP-1559 / typed tx); each shard is assigned a distinct Ethereum-style `chainId`**. These are breaking changes requiring **regenesis**.
 
 The expected outcome is:
 
-- A substantially thinner patch set on top of upstream geth, making rebases onto new geth releases practical.
+- A thinner patch set on top of upstream geth (concentrated in pre/post-block hooks, a system-contract predeploy, and a PoSW data query — all separable from the EVM/StateDB/opcode core), making rebases onto new geth releases practical.
 - Future EVM and consensus upgrades from upstream geth become routine to adopt rather than major porting projects.
 - Clean separation of concerns: consensus in CL, execution in EL.
 
@@ -208,10 +208,10 @@ A simplified view of the current 5-stage xshard protocol:
 - **P1 — Two-level consensus, one execution layer per shard.** Root chain consensus remains in master (no CL/EL split at the root level — root chain has no EVM to separate out). Each shard is a classic CL/EL pair.
 - **P2 — Engine API is the only boundary between CL and EL.** No shortcuts, no direct access to geth internals from CL code. This is what preserves forward compatibility.
 - **P3 — Extend Engine API only when geth's existing primitives cannot model the semantics.** Every extension should be documented and kept minimal.
-- **P4 — Cross-shard logic lives in master and CL, never in EL.** The EL sees only pre-block balance patches (for incoming xshard) and post-block extracted event lists (for outgoing xshard). It never learns the word "shard".
-- **P5 — Match Ethereum patterns when semantically appropriate.** Source-side xshard mirrors EIP-7002 (system contract + post-block extraction). Destination-side xshard mirrors EIP-4895 (pre-block balance patch).
+- **P4 — Cross-shard logic lives in CL, never in the EVM proper.** The EL receives a pre-block list of xshardDeposits (each applied as either a balance credit or a system-level CALL) and emits a post-block xshardSends list (extracted from the source system contract's queue). The EVM interpreter, StateDB, opcodes, and tx pool never learn the word "shard". Master's only xshard role is committing source mheaders for ordering — it does not carry payload.
+- **P5 — Match Ethereum patterns when semantically appropriate.** Source-side xshard mirrors EIP-7002 (system contract + post-block extraction). Destination-side xshard generalizes EIP-4895's pre-block hook into a system call (value + calldata + gas) so EOA-to-contract xshard is preserved; pure value transfers degrade to the EIP-4895 balance-patch path.
 - **P6 — Align the tx format with standard Ethereum.** Each shard gets its own Ethereum-style `chainId`; tx format is standard EIP-1559 (or typed tx in general). QKC-specific fields are either eliminated by design simplifications or moved to CL/master state.
-- **P7 — Accept breaking changes where they buy large simplification.** Multi-token removal, restricting xshard to pure value transfer (dropping EOA-to-contract xshard with calldata), and regenesis are explicitly in scope.
+- **P7 — Accept breaking changes where they buy large simplification.** Multi-native-token removal and regenesis are explicitly in scope.
 
 ### 4.2 Component Split
 
@@ -222,8 +222,10 @@ A simplified view of the current 5-stage xshard protocol:
 │  - RootBlockChain: validation, storage                               │
 │  - Root consensus engine (Ethash/QkcHash for root)                   │
 │  - Root synchronizer, miner                                          │
-│  - Multi-shard coordination: mheader whitelist, xshard routing       │
-│  - Minor P2P forwarding hub (unchanged mechanism)                    │
+│  - Multi-shard coordination: receives mheaders from local shard CLs, │
+│    commits a subset into each root block (= root-chain ordering)     │
+│  - Minor P2P forwarding hub: forwards inter-cluster minor-block      │
+│    gossip between clusters (unchanged from current QKC)              │
 │                                                                      │
 │  Largely reused from current GoQuarkChain master code                │
 └──────────────────────────────────────────────────────────────────────┘
@@ -240,7 +242,8 @@ A simplified view of the current 5-stage xshard protocol:
 │ │               │ │ │ │               │ │ │ │               │ │
 │ │ - fork choice │ │ │ │               │ │ │ │               │ │
 │ │ - PoW / PoSW  │ │ │ │               │ │ │ │               │ │
-│ │ - Seal loop   │ │ │ │               │ │ │ │               │ │
+│ │ - Mining work │ │ │ │               │ │ │ │               │ │
+│ │   API         │ │ │ │               │ │ │ │               │ │
 │ │ - Synchronizer│ │ │ │               │ │ │ │               │ │
 │ │ - Xshard      │ │ │ │               │ │ │ │               │ │
 │ │   orchestrate │ │ │ │               │ │ │ │               │ │
@@ -282,10 +285,11 @@ Reassigning the work currently done by each slave:
 | Difficulty adjustment | In-slave | **In CL** | — |
 | Fork choice for minor chain | In-slave (TD comparison in InsertChain) | **In CL**; communicates via `engine_forkchoiceUpdated` | Passive: switches canonical head on CL's instruction |
 | Root-triggered reorg cascade | In-slave (entangled) | **In CL** (pure orchestration via `engine_forkchoiceUpdated`) | geth's native state rewind |
-| Seal loop (miner) | Separate goroutine | **In CL** | — |
+| Seal loop (miner) | Separate goroutine in slave; existing `getWork` / `submitWork` (JSON-RPC + gRPC) interface | **Same `getWork` / `submitWork` interface, backed by CL** (template via Engine API, PoSW via `eth_getBalance` + CL block-tree). Miner ergonomics unchanged; CL does not drive the loop. | — |
 | Xshard tx initiation on source | In-EVM (hook) | — | **Via predeployed system contract** |
-| Xshard deposit application on destination | In-EVM (cursor) | Orchestrate via master | **Via pre-block balance patch** (like withdrawals) |
-| Xshard cursor state | Committed in block meta (`xshard_tx_cursor_info`) | **Implicit; derived by master from root-chain history**. The committed artifact is the `xshardDeposits` list in each minor block, not the cursor itself. See §4.6. | — |
+| Xshard deposit application on destination | In-EVM (cursor) | **Receive `xshardSends` from source CLs; compute `xshardDeposits` from canonical root chain; orchestrate via Engine API** | **Pre-block hook**: balance credit for pure transfers, system CALL (with calldata + gas) for EOA-to-contract |
+| Xshard cursor state | Committed in block meta (`xshard_tx_cursor_info`) | **Implicit in each block's `xshardDeposits` list; cached in destination CL and recoverable from chain history.** See §4.6. | — |
+| Inter-shard xshard payload transport | Slave-to-slave broadcast (master forwarding) | **CL-to-CL push** (master forwarding, unchanged transport) | — |
 | Minor P2P gossip | In slave, via master forwarding | **In CL**, via master forwarding (unchanged) | — |
 | JSON-RPC reads (`getBalance` / `getLogs` / ...) | In slave | **Proxy to EL's standard `eth_*`** | geth's native JSON-RPC |
 | `AddMinorBlockHeader` / `GetUnconfirmedHeaders` / other master gRPC | In slave | **In CL** (protocol unchanged) | — |
@@ -325,27 +329,37 @@ ExecutionPayload {
 
 XshardDeposit {
   from:             Address (20 bytes)
-  to:               Address (20 bytes)
+  to:               Address (20 bytes)  // for CREATE: pre-derived contract address
   value:            uint256
+  data:             bytes      // calldata for CALL, init code for CREATE; empty for pure transfer
+  create:           bool       // true = CREATE on destination, false = CALL/transfer
+  gasLimit:         uint64     // gas allowance for destination-side execution
+  destGasPrice:     uint256    // max price the user committed to pay on destination shard (in QKC)
+  refundRate:       uint8      // percentage of unused gas refunded to `from` on destination shard
   sourceShard:      uint32
-  rootBlockHeight:  uint64    // root block that confirmed the source minor block
-  mheaderIndex:     uint32    // mheader's index within that root block
-  sendIndex:        uint32    // send's index within source minor block's xshardSends
+  rootBlockHeight:  uint64     // root block that confirmed the source minor block
+  mheaderIndex:     uint32     // mheader's index within that root block
+  sendIndex:        uint32     // send's index within source minor block's xshardSends
 }
 
 XshardSend {
-  from:        Address (20 bytes)
-  to:          Address (20 bytes)
-  value:       uint256
-  destShard:   uint32
-  nonce:       uint64
+  from:          Address (20 bytes)
+  to:            Address (20 bytes)
+  value:         uint256
+  data:          bytes      // calldata or init code; empty for pure transfer
+  create:        bool
+  gasLimit:      uint64
+  destGasPrice:  uint256
+  refundRate:    uint8
+  destShard:     uint32
+  nonce:         uint64
 }
 ```
 
-Semantics:
+Semantics in brief (full mechanics in §4.6):
 
-- `xshardDeposits` is applied as a pre-block balance credit, analogous to EIP-4895 `withdrawals`. No tx, no gas, no signature.
-- `xshardSends` is extracted from the predeployed `XshardSend` system contract's storage queue at end of block, analogous to EIP-7002 `withdrawalRequests`. The originating user transaction remains a first-class entry in `block.transactions`.
+- `xshardDeposits` is applied at the start of the destination block via a pre-block hook (balance credit on the EIP-4895 fast path; system-level CALL on the EOA-to-contract path).
+- `xshardSends` is extracted from the source-side `XshardSend` system contract's queue at end of block, analogous to EIP-7002 `withdrawalRequests`. The originating user transaction remains a first-class entry in `block.transactions`.
 
 #### PoSW data sourcing
 
@@ -399,6 +413,10 @@ The consequence is that wallets (MetaMask, WalletConnect), Solidity tooling, blo
 
 ### 4.6 Xshard Redesign
 
+The redesign keeps the data-plane topology current QKC already has — source-shard payload pushed directly to destination shards — and replaces the EVM-integrated mechanics with two clean hooks at the EL boundary: a predeployed system contract on the source side (mirroring EIP-7002) and a pre-block system call on the destination side (a controlled generalization of EIP-4895 that supports value, calldata, and gas). The root chain still commits source mheaders for ordering, but **carries no xshard payload bytes** — master is control plane only.
+
+The EVM proper sees no shard concept anywhere. All shard-awareness lives in (a) the source system contract's tx interface, (b) the EL's post-block `xshardSends` extraction, and (c) the EL's pre-block `xshardDeposits` apply hook.
+
 #### Source side: EIP-7002–style system contract
 
 A predeployed contract at a fixed address (conceptual example):
@@ -409,6 +427,10 @@ contract XshardSend {
         address from;
         address to;
         uint256 value;
+        bytes   data;            // calldata for destination invocation; empty = pure transfer
+        uint64  gasLimit;        // gas allowance reserved for destination-side execution
+        uint256 destGasPrice;    // user-specified max price for destination gas (in QKC)
+        uint8   refundRate;      // unused-gas refund percentage on destination
         uint32  destShard;
         uint64  nonce;
     }
@@ -424,111 +446,179 @@ contract XshardSend {
         uint64  nonce
     );
 
-    function send(address to, uint32 destShard) external payable {
+    /// @param destGasPrice  Gas price the user commits to pay on the
+    ///                      destination shard. Decoupled from source-side
+    ///                      `tx.gasprice` because each shard has its own fee
+    ///                      market. No separate priority-fee parameter is
+    ///                      needed: xshardDeposits are not auctioned in a
+    ///                      mempool — protocol forces them into each block
+    ///                      in canonical lex order — so there is nothing to
+    ///                      bid for. Destination semantics: if
+    ///                      `destGasPrice >= destBaseFee`, the deposit
+    ///                      executes at price `destGasPrice` per gas
+    ///                      (`destBaseFee` burned, remainder credited to
+    ///                      destination miner); otherwise the deposit
+    ///                      reverts and unused gas is refunded per
+    ///                      `refundRate`.
+    uint64 constant MIN_XSHARD_DEPOSIT_GAS = 9000;   // protocol-fixed; analog of current QKC's GTXXSHARDCOST
+
+    function send(
+        address to,
+        uint32  destShard,
+        bytes calldata data,
+        uint64  gasLimit,
+        uint256 destGasPrice
+    ) external payable {
         require(destShard != currentShard(), "use normal transfer on same shard");
+        require(gasLimit >= MIN_XSHARD_DEPOSIT_GAS, "gasLimit below MIN_XSHARD_DEPOSIT_GAS");
+        require(destGasPrice >= 1, "destGasPrice must be > 0");      // ensures positive fee per deposit
+        // msg.value must cover both the transferred value and gasLimit * destGasPrice
+        uint256 reserved = uint256(gasLimit) * destGasPrice;
+        require(msg.value >= reserved, "msg.value insufficient for value + dest gas");
         uint64 n = nextNonce++;
-        queue.push(Request(msg.sender, to, msg.value, destShard, n));
-        emit XshardRequest(msg.sender, to, msg.value, destShard, n);
+        queue.push(Request(
+            msg.sender, to, msg.value - reserved, data,
+            gasLimit, destGasPrice, /*refundRate=*/100, destShard, n));
+        emit XshardRequest(msg.sender, to, msg.value - reserved, destShard, n);
     }
 }
 ```
 
+Note: `destGasPrice` is an **explicit parameter**, not `tx.gasprice`. Each shard has its own EIP-1559 fee market, so the source tx's effective price is not a meaningful estimate for destination-side execution. The user signs at source shard's price for the source-side `send` call, and separately states the max price they're willing to pay on the destination shard.
+
 Alice's xshard transfer becomes a **normal Ethereum transaction**:
 - `chainId = <source shard chainId>`
 - `to = <XshardSend contract address>`
-- `value = 100 ETH`
-- `data = abi.encode("send", Bob_20byte_addr, dest_shard_id)`
-- Standard signature, nonce, gas.
+- `value = 100 ETH + (gasLimit × destGasPrice)`
+- `data = abi.encodeCall(XshardSend.send, (Bob_20byte_addr, dest_shard_id, contractCalldata, gasLimit, destGasPrice))`
+- Standard signature, nonce, source-shard gas.
+
+For pure value transfers, `contractCalldata` is empty and `gasLimit = MIN_XSHARD_DEPOSIT_GAS` (the protocol minimum, ~9000 gas, analogous to current QKC's `GTXXSHARDCOST`); `destGasPrice` must be at least the destination shard's `baseFee` for the deposit to apply. The destination side takes the EIP-4895 fast path (balance credit only, no EVM invocation), but still consumes the minimum gas — this is what makes spam economically costly even for fast-path deposits and is the source-side leg of destination rate limiting.
 
 **EL behavior (a small patch)**:
 - At end of block execution, scan `XshardSend` contract's `queue` storage slots.
 - Extract entries into `xshardSends` field of the returned `ExecutionPayload`.
 - Clear the queue (set storage slots to zero).
-- Burn the contract's accumulated balance (the value has conceptually left this shard).
+- Burn the contract's accumulated balance (both the value and the reserved gas budget have conceptually left this shard; refunds are handled on the destination side).
 
 The originating user transaction **remains in `block.transactions`**, is signed, has a receipt, and is findable via standard `eth_getTransactionByHash` and block explorers.
 
-**Where xshard is initiated**: via explicit calls to the `XshardSend` system contract. Solidity contracts cannot initiate xshard through an arbitrary cross-shard `call.value` — this was never supported in current QKC either (EVM's `CALL` opcode has no shard awareness). The system contract is the one and only on-ramp, which keeps the EVM unmodified.
+**Who can initiate**: any caller of `XshardSend.send` — both EOAs (top-level tx) and contracts (mid-execution CALL). The `msg.sender` recorded as the deposit's `from` is the caller's address. Contract-initiated xshard is **new** versus current QKC, where xshard was a tx-level concept; it falls out for free here because `XshardSend` is just a normal callable contract.
 
-#### Destination side: EIP-4895–style pre-block patch
+#### Destination side: pre-block system call (EIP-4895 generalized)
 
-The destination shard's CL — coordinated by master — receives a list of `XshardDeposit` entries that should be applied at the start of a given block. These arrive via the `xshardDeposits` field in `engine_forkchoiceUpdated.payloadAttributes` or `engine_newPayload`.
+The destination shard's CL receives `XshardSend` entries from source-shard CLs (see "Data flow" below), holds them until they are root-confirmed, and on each new block selects the next batch as `xshardDeposits` to apply at the start of the block. The list arrives in the EL via the `xshardDeposits` field in `engine_forkchoiceUpdated.payloadAttributes` or `engine_newPayload`.
 
-**EL behavior (a small patch, directly analogous to Withdrawal processing)**:
+**EL behavior (pre-block hook)**:
 
 ```go
 // pre-block hook, before tx execution
-for _, deposit := range payload.XshardDeposits {
-    stateDB.AddBalance(deposit.To, deposit.Value)
+for _, d := range payload.XshardDeposits {
+    // Common: every deposit pays at least MIN_XSHARD_DEPOSIT_GAS,
+    // burns destBaseFee per gas, miner gets the rest. This is the
+    // intrinsic-gas equivalent for xshard and the source-side leg of
+    // destination rate limiting.
+    if d.DestGasPrice < destBaseFee {
+        // deposit reverts; full reserved gas refunded per d.RefundRate
+        refundRevert(stateDB, d)
+        continue
+    }
+
+    if len(d.Data) == 0 && !d.Create && stateDB.GetCodeSize(d.To) == 0 {
+        // EIP-4895 fast path: pure value transfer to EOA
+        stateDB.AddBalance(d.To, d.Value)
+        chargeAndRefund(stateDB, d, /*gasUsed=*/MIN_XSHARD_DEPOSIT_GAS)
+        continue
+    }
+
+    // EOA-to-contract or CREATE path: synthesize a system-level call
+    // - sender = d.From; the source side already debited d.From's account
+    //   on the source shard, so we credit d.From here for the duration
+    //   of this call (matching how current QKC's apply_xshard_deposit works)
+    stateDB.AddBalance(d.From, d.Value)
+    sysCall := SystemCall{
+        From:     d.From,
+        To:       d.To,
+        Value:    d.Value,
+        Data:     d.Data,
+        Gas:      d.GasLimit - MIN_XSHARD_DEPOSIT_GAS,   // remainder after intrinsic
+        GasPrice: d.DestGasPrice,
+        Create:   d.Create,
+    }
+    used, _ := evm.Execute(sysCall)            // standard EVM, no shard awareness
+    chargeAndRefund(stateDB, d, /*gasUsed=*/MIN_XSHARD_DEPOSIT_GAS + used)
 }
 ```
 
-No signature verification, no gas, no nonce — just a trusted balance addition. The trust boundary is the same as Ethereum withdrawals: EL trusts CL, which trusts master, which runs the root consensus.
+`chargeAndRefund(stateDB, d, gasUsed)` performs the standard EIP-1559 split:
 
-#### Master's coordination role
+```
+fee_burn  = gasUsed * destBaseFee                         # burned
+fee_miner = gasUsed * (d.DestGasPrice - destBaseFee)      # to destination miner
+refund    = (d.GasLimit - gasUsed) * d.DestGasPrice * d.RefundRate / 100   # to d.From
+```
 
-Master is the xshard router:
+The EVM never learns the word "shard" — it just sees a pre-block CALL like any other. The QKC-specific work is confined to the framing loop: deciding when to call (driven by the deposit list) and where the gas goes after (fee/refund split).
 
-1. Collects `xshardSends` from each shard CL (piggybacking on the existing `AddMinorBlockHeader` gRPC, or a separate message).
-2. Keys them by the producing minor block's hash. When a root block confirms a set of minor block headers, the associated `xshardSends` become "root-confirmed" and routable to destination shards.
-3. Maintains a **per-destination-shard cursor** over the root chain, so it knows what it has already handed out.
-4. When shard B's CL prepares the next block, master supplies a batch of `xshardDeposits` for the block to apply.
+The trust boundary is the same as Ethereum withdrawals: EL trusts CL, and every cluster's CL independently verifies that the declared list matches what canonical root-chain ordering says it should be.
 
-Centralizing cursor state in master eliminates the non-standard `xshard_tx_cursor_info` field from the block meta.
+Estimated patch size: ~50–100 LOC in geth — a pre-block iteration over deposits, a fast path for pure transfers, and a system-call helper that mirrors `runtime.Call` (the same pattern post-Pectra system contracts use).
 
-#### How consensus holds without a committed cursor
+#### Data flow: source CL → destination CL direct push
 
-The cursor itself is not a consensus object. What is committed is the `xshardDeposits` list in each minor block (carried in the `ExecutionPayload`, and therefore in the block hash committed by `mheader`). Every cluster independently derives what that list *should* be from the shared inputs, then verifies the block's declared list matches.
+The xshard payload bytes never pass through master. The flow mirrors current QKC's slave-to-slave broadcast — only the layer name changes.
 
-The derivation is a pure function of:
+1. **Source EL** produces a payload containing `xshardSends` (extracted from the system contract's queue post-block).
+2. **Source CL** groups `xshardSends` by destination shard and pushes each group directly to the relevant destination CL(s) within the same cluster (gRPC, the new equivalent of current QKC's slave-to-slave `AddXshardTxListRequest`). Cross-cluster propagation rides on the standard minor-block gossip (the produced block already contains `xshardSends` inline in its `ExecutionPayload`), which master forwards as it forwards any minor block.
+3. **Master** independently receives the source `mheader` via `AddMinorBlockHeader` and commits a subset of mheaders into the next root block. Once a root block confirms a source mheader, the `xshardSends` it produced become **routable** at every destination CL — i.e., eligible to be drained into a destination block.
+4. **Destination CL** advances its cursor over the canonical root chain in lex order over `(rootBlockHeight, mheaderIndex, sendIndex)`, picks newly-routable entries up to the per-block gas budget (`XSHARD_GAS_LIMIT_PER_BLOCK`), and supplies them as `xshardDeposits` in its next payload.
 
-1. The canonical root chain up to the minor block's parent root anchor.
-2. The `xshardSends` lists emitted by each root-confirmed minor block (recoverable from the minor blocks referenced by `mheader`).
-3. Protocol-defined rules (see next paragraph).
+The root chain is therefore an **ordering and confirmation anchor**, not a data carrier. Root-chain bandwidth stays proportional to mheader count rather than total xshard volume — same scaling property current QKC has, and the same pattern L2 interop ecosystems (e.g. Optimism Superchain) have converged on.
 
-As long as all clusters see the same root chain and the same underlying minor blocks, they compute the same `xshardDeposits` for each shard's next block.
+#### Cursor and consensus
 
-**Required protocol rules** (must be part of the new protocol specification):
+The cursor is not a consensus object. Each block's committed `xshardDeposits` list is — every entry carries its position triple `(rootBlockHeight, mheaderIndex, sendIndex)`, and the cursor at any instant is implicit: "the position immediately after the last entry in the most recent non-empty `xshardDeposits` on the destination's canonical chain". This mirrors how Ethereum commits the `withdrawals` list in each EL block while `next_withdrawal_validator_index` lives in CL state as a cache.
 
-- **Deterministic ordering**: lexicographic over `(root_block_height, mheader_index_in_root_block, xshard_send_index_in_minor_block)`.
-- **Per-block cap**: a fixed maximum number of deposits applied per destination-shard block (analogous to EIP-4895's `MAX_WITHDRAWALS_PER_PAYLOAD`).
-- **Cursor starting point for block B_N**: the root-chain position immediately following the last deposit in `B_{N-1}.xshardDeposits`. For the genesis block, the starting cursor is `(genesis_root_height, 0, 0)`.
-- **Unfinished deposits carry over**: if a cap prevents applying all eligible deposits in one block, the remainder is applied in subsequent blocks in the same order.
-- **Reorg behavior**: on a root-chain reorg, the cursor is recomputed from the new canonical view. Downstream shard reorg is driven by `engine_forkchoiceUpdated` as in §5.4.
+Destination CL caches the cursor and recovers it on restart by walking back through the destination chain until a non-empty `xshardDeposits` is found (genesis gives the initial cursor `(genesis_root_height, 0, 0)`). On a root-chain reorg the cache is invalidated and recomputed; downstream shard reorg is driven by `engine_forkchoiceUpdated` as in §5.4.
 
-Master maintains the cursor as an in-memory / on-disk optimization, not as authoritative state. If master crashes, the cursor is recovered by re-deriving from the tip block's `xshardDeposits`. If master is buggy or malicious and produces a wrong `xshardDeposits` list, the block it proposes is rejected by other clusters' verifiers — exactly as Ethereum rejects a block whose `withdrawals` list does not match what each node independently computes from the beacon state.
+Because the derivation is a pure function of (a) the canonical root chain up to the parent root anchor, (b) the `xshardSends` lists emitted by each root-confirmed source minor block, and (c) the protocol rules below, every cluster independently computes the same `xshardDeposits` and rejects any block whose declared list disagrees.
 
-This is the same pattern Ethereum uses for withdrawals: `next_withdrawal_validator_index` lives in beacon state (CL-local), only the resulting `withdrawals` list is committed in the EL block, and every node verifies independently.
+**Required protocol rules**:
 
-**Concrete example.** Each `XshardDeposit` carries a position tuple `(rootBlockHeight, mheaderIndex, sendIndex)` identifying its location in root-chain history. Consider:
+- **Deterministic ordering**: lexicographic over `(rootBlockHeight, mheaderIndexInRootBlock, xshardSendIndexInMinorBlock)`.
+- **Per-deposit minimum gas (`MIN_XSHARD_DEPOSIT_GAS`)**: every deposit consumes at least this constant (analogous to current QKC's `GTXXSHARDCOST = 9000`). Enforced both at source-side `XshardSend.send` (rejects `gasLimit < MIN_XSHARD_DEPOSIT_GAS`) and at destination-side hook (charges this minimum even on the EIP-4895 fast path). Reason: makes spam economically costly per slot consumed and gives a transitive upper bound on per-block deposit count.
+- **Per-block xshard gas budget (`XSHARD_GAS_LIMIT_PER_BLOCK`)**: the cumulative `gasLimit` of deposits packed into a destination block must not exceed this constant (analogous to current QKC's `evm_xshard_gas_limit`, and to how Ethereum mainnet packs txs against block gas limit using `gasLimit`, not actual `gasUsed`). Because each deposit may invoke a contract with variable gas cost, computation is the right primitive to bound — a count cap (as EIP-4895 uses for fixed-cost withdrawals) would not stop a small number of expensive deposits from blowing past the block's compute budget. Per-block deposit count is implicitly bounded by `XSHARD_GAS_LIMIT_PER_BLOCK / MIN_XSHARD_DEPOSIT_GAS`.
+- **Cursor starting point for block B_N**: the position immediately following the last deposit in `B_{N-1}.xshardDeposits`. For the genesis block, `(genesis_root_height, 0, 0)`.
+- **Unfinished deposits carry over**: if the gas budget prevents applying all eligible deposits in one block, the remainder is applied in subsequent blocks in the same order.
 
-- Shard A produces A_100 (Alice→Bob, 100) and A_101 (Carol→Bob, 50). A_102 has no xshard.
-- R_500 confirms `[A_100, B_199, C_50]`; A_100 is at mheader index 0. Alice's deposit position is `(500, 0, 0)`.
-- R_501 confirms `[B_200, A_101, A_102, C_51]`; A_101 is at mheader index 1. Carol's deposit position is `(501, 1, 0)`.
+**Concrete example.** Each `XshardDeposit` carries a position tuple `(rootBlockHeight, mheaderIndex, sendIndex)` identifying its location in root-chain history. Note the root-block mheader list ordering rule (inherited from current QKC): mheaders are arranged **in ascending order of `fullShardID`**, and within each shard the included mblocks are **height-contiguous starting from `lastConfirmed + 1`** (with a per-shard-per-root cap of 18 mblocks). Consider:
+
+- Shard A produces A_100 (Alice→Bob, 100), A_101 (Carol→Bob, 50), and A_102 (no xshard sends).
+- R_500 confirms `[A_100, B_199, C_50]` — A first (shard 0), then B (shard 1), then C (shard 2). A_100 is at mheader index 0. Alice's deposit position is `(500, 0, 0)`.
+- R_501 confirms `[A_101, A_102, B_200, C_51]` — A's two heights come first (consecutive from `lastConfirmed_A + 1 = 101`), then B, then C. A_101 is at mheader index 0. Carol's deposit position is `(501, 0, 0)`.
 
 Shard B's blocks (mining against the latest confirmed root each time):
 
-- **B_203**, mined when only R_500 is confirmed:
-  `xshardDeposits = [{Alice→Bob, pos=(500,0,0)}]`
-- **B_204**, mined after R_501 confirmed. Cursor = last entry of B_203.xshardDeposits = `(500,0,0)`. Scan from `(500,0,1)` forward in lex order; `(501,1,0)` is the next hit for shard B:
-  `xshardDeposits = [{Carol→Bob, pos=(501,1,0)}]`
-- **B_205**, mined after R_502 confirmed but R_502 has no new sends to B. Cursor = `(501,1,0)`. Scan forward, find nothing:
+- **B_203**, mined when only R_500 is confirmed. Cursor at genesis. Scan R_500's mheader list: A_100 (mheader index 0) has one send to B at sendIndex 0; B_199 is own block (skipped); C_50 has no sends to B.
+  `xshardDeposits = [{Alice→Bob, pos=(500, 0, 0)}]`
+- **B_204**, mined after R_501 confirmed. Cursor = last entry of B_203.xshardDeposits = `(500, 0, 0)`. Scan from `(500, 0, 1)` forward in lex order. R_500 has no more sends to B. R_501 mheader 0 = A_101 has one send to B at sendIndex 0:
+  `xshardDeposits = [{Carol→Bob, pos=(501, 0, 0)}]`
+- **B_205**, mined after R_502 confirmed but R_502 has no new sends to B. Cursor = `(501, 0, 0)`. Scan forward through R_501's remaining mheaders (A_102, B_200, C_51) and R_502's mheaders, find no sends to B:
   `xshardDeposits = []`
-- **B_206**, same story. Parent B_205 has an empty list, so walk back to B_204 (most recent non-empty) to recover cursor `(501,1,0)`. Still nothing new:
+- **B_206**, same story. Parent B_205 has an empty list, so walk back to B_204 (most recent non-empty) to recover cursor `(501, 0, 0)`. Still nothing new:
   `xshardDeposits = []`
 
-Any verifier reproducing B_205 (or B_206) runs the same lex-order scan against the same canonical root chain and reaches the same list — the cursor never needs to be stored in a block. If the worst case of consecutive empty blocks grows long, master maintains an in-memory cursor as an optimization; on restart or reorg, the cursor is recovered by walking back until a non-empty `xshardDeposits` is found (or all the way to genesis, which gives the initial cursor `(genesis_root_height, 0, 0)`).
+Any verifier reproducing B_205 (or B_206) runs the same lex-order scan against the same canonical root chain and reaches the same list — the cursor never needs to be stored in a block.
 
-#### Restriction: xshard becomes pure value transfer
+#### Destination-side action types
 
-A note on what is and isn't supported today:
+Three behaviors, selected by `data` and `create`:
 
-- **Current QKC**: xshard is determined at tx-level (`from_full_shard_key` vs `to_full_shard_key`), not inside EVM. A contract calling `CALL` mid-execution has no shard awareness and cannot trigger xshard — this was never supported. What *is* supported today is an EOA tx whose `to` is a contract on another shard and whose `data` is calldata: the source shard does not execute EVM, and the destination shard applies the deposit by invoking the target contract with that calldata.
-- **Proposed design**: `XshardSend.send(to, destShard)` is payable-only, with no calldata passed to the destination. Xshard becomes a pure value transfer from the EOA's perspective; the destination shard applies it as a balance credit to `to`, not as a contract invocation.
+- **Value transfer to EOA** (`data == ∅`, `create == false`, `to` is an EOA). EIP-4895 fast path: balance credit + charge `MIN_XSHARD_DEPOSIT_GAS`. No EVM invocation.
+- **Call into existing contract with calldata** (`data != ∅`, `create == false`). System-level CALL into `to` with `value`, `data`, and `gasLimit - MIN_XSHARD_DEPOSIT_GAS` of gas.
+- **CREATE a new contract** (`create == true`). System-level deployment; destination address derived from `(from, from's source-shard nonce at the time of `XshardSend.send`)` via the standard Ethereum CREATE rule.
 
-The capability lost in the transition is therefore "EOA-to-contract xshard with calldata", not "contract-to-contract xshard" (which never worked). dApps that relied on the lost capability need to rebuild using bridge/relayer patterns: a relayer on the destination shard observes `XshardRequest` events and submits a local transaction invoking the target contract.
-
-Preserving the calldata capability inside the new architecture is possible (by extending the XshardSend API and having the pre-block hook execute a system-level EVM call rather than a plain AddBalance), but it trades off against the simplicity of the Withdrawals-style model and introduces non-trivial questions around gas accounting, refunds, and revert handling. The initial recommendation is to accept the regression.
+Async caveat: `XshardSend.send` returns immediately after queuing; the destination effect happens in a future destination-shard block. The initiating caller cannot synchronously observe destination-side success/revert — applications that need a result must implement a return-trip xshard from the destination.
 
 ### 4.7 Breaking Changes and Regenesis
 
@@ -537,11 +627,10 @@ This rearchitecture requires **regenesis** of every shard and the root chain. Th
 | Change | Reason | Migration path |
 |---|---|---|
 | Transaction format: QKC-specific tx → standard Ethereum typed tx (per-shard `chainId`) | Tx with extra fields is incompatible with geth's tx pool and signer | New genesis; users submit new transactions to the new chain; historic tx history not migrated |
-| Multi-native-token → single native token | Multi-token requires forking EVM / StateDB | New genesis with only the native token; other tokens migrate to ERC-20 contracts |
-| Xshard semantics: EVM-integrated → EIP-7002 style | EVM must remain standard | New genesis; users use the new system contract for cross-shard |
-| EOA-to-contract xshard with calldata → removed; xshard becomes pure value transfer | Keeps EVM unmodified and pre-block hook simple | No migration; affected dApps rebuild with bridge/relayer patterns |
+| Multi-native-token → single native token | Multi-token requires forking EVM / StateDB | New genesis with only the native token. Future tokens are deployed as ERC-20s. |
+| Xshard semantics: EVM-integrated → system contract + pre-block hook | EVM must remain standard | New genesis; users initiate xshard via `XshardSend.send(to, destShard, data, gasLimit, destGasPrice)`. EOA-to-contract with calldata is preserved, and contract-initiated xshard mid-execution becomes possible (new vs current QKC) since `XshardSend` is a normal callable system contract. |
 | Wallet / RPC address format: 24 bytes → 20 bytes | Standard tooling compatibility | User-facing address format changes; account balances migrated via snapshot (`Recipient` is preserved since EVM already uses 20 bytes internally) |
-| Block header / meta shape | Standard Ethereum block header replaces QKC's split header/meta structure; xshard cursor moves to master, multi-token reward removed, Coinbase reduced to 20 bytes, `hash_prev_root_block` encoded via `extraData`, `hash_meta` disappears | New genesis |
+| Block header / meta shape | Standard Ethereum block header replaces QKC's split header/meta structure; explicit `xshard_tx_cursor_info` is removed (cursor becomes implicit in each block's `xshardDeposits`), multi-token reward removed, Coinbase reduced to 20 bytes, `hash_prev_root_block` encoded via `extraData`, `hash_meta` disappears | New genesis |
 
 **Important property**: because the EVM internally already uses 20-byte `common.Address`, **existing contract bytecode is fully portable** to the new chain. Snapshot migration only needs to carry balances (and storage, if desired) — contracts deployed under the old chain can run unmodified under the new chain, since Solidity's `address` type has always been 20 bytes. The 24-byte address is purely a wallet/display concept that never enters EVM execution.
 
@@ -588,63 +677,48 @@ slave.broadcastNewTip() → peers
 
 `MinorBlockChain` is responsible for several distinct concerns (execution, re-execution, validation, fork choice, DB write) entangled in one method.
 
+(The diagram above shows the bundled local miner. Current QKC also exposes the standard `getWork(coinbase) → MiningWork{header_hash, height, difficulty}` and `submitWork(header_hash, nonce, mixhash)` interface — JSON-RPC for external miners, internal gRPC for the local one — backed by `Miner.get_work` / `Miner.submit_work` ([miner.py:271, 301](../quarkchain/cluster/miner.py#L271)) with a header-hash-keyed work cache. The proposed design preserves this interface verbatim and only changes its backend.)
+
 #### Proposed
 
-Because QKC mining is continuous PoW (not the fixed-slot model of Ethereum PoS), the CL does not wait a fixed amount of time between starting payload construction and retrieving it. Instead it takes the first payload immediately, hands it to the miner, and periodically refreshes the template while the miner is hashing — the same pattern Bitcoin's `getBlockTemplate` loop and Ethereum's pre-merge `eth_getWork` loop use.
+The mining interface stays exactly as it is today — current QKC already exposes `getWork(coinbase)` and `submitWork(header_hash, nonce, mixhash)` (JSON-RPC for external miners; internal gRPC for the bundled local miner). Both miner-side ergonomics and the wire format are unchanged. What changes is the backend: instead of the slave building the template and applying PoSW, the **CL** builds the template via Engine API and applies PoSW.
+
+**Backend of `getWork(coinbase)` in the new design**:
 
 ```
-CL miner loop (runs continuously):
-
-  # (1) Start a new payload build on the current tip
-  payloadId = engine_forkchoiceUpdatedV3(
-      forkchoiceState = { head = currentTip, ... },
-      payloadAttributes = {
-          timestamp, prevRandao, feeRecipient,
-          xshardDeposits = [from master],
-          ...
-      }
-  )
-
-  # (2) Take the payload immediately — no wait
-  payload = engine_getPayloadV3(payloadId)
-  # payload includes xshardSends extracted from the XshardSend contract
-
-  # (3) Compute PoSW divider for this coinbase
-  stake           = eth_getBalance(coinbase, payload.parentHash)        # standard JSON-RPC
-  recentMineCount = clBlockTree.countCoinbase(coinbase, payload.parentHash, windowSize)  # CL-local
-  windowSize      = config.poswWindowSize                                # config
-  adjustedDifficulty = applyPoSW(payload.difficulty, stake, recentMineCount, windowSize)
-
-  # (4) Hand off to the local miner
-  miner.setTemplate(payload, adjustedDifficulty)
-
-  # (5) Wait for either a found nonce or a refresh interval (e.g., 1-2s)
-  event = wait_either(miner.found, timeout = refreshInterval)
-
-  if event == found:
-      # (6a) Seal and commit
-      sealed = applyNonce(payload, event.nonce, event.mixhash)
-      engine_newPayloadV3(sealed)
-          # EL validates tx-level correctness, writes block + state to DB
-      engine_forkchoiceUpdatedV3(
-          forkchoiceState = { head = sealed, ... },
-          payloadAttributes = null  // mode A: just update head
-      )
-          # EL updates canonical pointer
-      CL broadcasts NewTip via master's P2P hub
-      CL sends AddMinorBlockHeaderRequest to master
-      # loop restarts on new tip
-  else:
-      # (6b) Timeout: refresh template to pick up new txs
-      # Loop restarts; miner's in-flight hashing on old template is discarded,
-      # but nonce space is vast so the loss is negligible.
+1. payloadId = engine_forkchoiceUpdatedV3(
+       head = currentTip,
+       payloadAttributes = { timestamp, feeRecipient = coinbase,
+                             xshardDeposits = [...], ... })
+2. payload  = engine_getPayloadV3(payloadId)
+3. stake           = eth_getBalance(coinbase, payload.parentHash)
+   recentMineCount = clBlockTree.countCoinbase(coinbase, payload.parentHash, windowSize)
+   difficulty      = applyPoSW(payload.difficulty, stake, recentMineCount, windowSize)
+4. cache (header_hash → full payload) for the subsequent submit
+5. return MiningWork{ header_hash, height, difficulty }   // same struct as today
 ```
+
+**Backend of `submitWork(header_hash, nonce, mixhash)`**:
+
+```
+1. payload = work_cache[header_hash]                      // matches current QKC's behavior
+   (reject if tip moved or cache evicted — same as today)
+2. sealed = applyNonce(payload, nonce, mixhash)
+3. engine_newPayloadV3(sealed)                             # EL writes block + state
+4. engine_forkchoiceUpdatedV3(head = sealed, payloadAttributes = null)
+5. broadcast NewTip via master's P2P hub
+6. send AddMinorBlockHeaderRequest to master
+```
+
+The work cache (current QKC keys by header_hash, evicts on tip change or 10s TTL) carries over unchanged.
+
+**Miner side is untouched**: any miner — bundled local miner, external GPU/ASIC rig over the existing JSON-RPC, mining pool — keeps polling `getWork` at its own cadence and submitting via `submitWork` exactly as before. CL is a passive work source; it does not drive the loop or dictate a refresh interval.
 
 Key points:
 
-- **No upfront wait.** Unlike Ethereum PoS's ~4-second delay between `forkchoiceUpdated` and `getPayload`, PoW miners want to start hashing immediately.
-- **Periodic template refresh.** Every `refreshInterval` (e.g., 1-2s) the CL re-invokes the pair to pick up new txs or changed xshard state. Losing 1-2s of hash attempts on template change is negligible against the 2⁶⁴ nonce space.
-- **Responsibilities remain cleanly split.** EL never decides what's canonical; CL never touches the state trie directly.
+- **Mining interface preserved.** `getWork` / `submitWork` semantics, wire format, and miner ergonomics all unchanged. Existing mining pools and rig software keep working as-is.
+- **Backend moves to CL.** Template construction goes through Engine API (`engine_forkchoiceUpdated` + `engine_getPayload`); PoSW computation happens in CL using `eth_getBalance` + CL-local block-tree walk.
+- **Responsibilities remain cleanly split.** EL never decides what's canonical (CL does, via `engine_forkchoiceUpdated`). CL never touches the state trie directly (EL does, on `engine_newPayload`). Miner has no view into either.
 
 ### 5.2 Scenario B — Receiving a minor block from a peer
 
@@ -750,8 +824,13 @@ Alice sends tx on shard A:
   tx {
     chainId = <shard A chainId>,
     to      = XshardSend_contract_20byte,
-    value   = 100,
-    data    = encode("send", Bob_20byte, shard_B_id),
+    value   = 100 + 9000 * 5_gwei,                   // = transfer value + reserved destination gas
+    data    = encode(send,
+                     to           = Bob_20byte,
+                     destShard    = shard_B_id,
+                     data         = "",               // empty: pure value transfer
+                     gasLimit     = 9000,             // = MIN_XSHARD_DEPOSIT_GAS (protocol minimum)
+                     destGasPrice = 5_gwei),          // user's max price on shard B
     ...
   }
   (standard EIP-1559 tx, submitted to shard A's JSON-RPC)
@@ -768,25 +847,46 @@ Shard A:
     - burns contract's accumulated value
   EL returns ExecutionPayload { ..., xshardSends: [Alice → Bob, 100, shard_B] }
 
-CL reads xshardSends from payload
-CL sends to master (piggyback on AddMinorBlockHeader or new message):
-  MinorBlockProduced { header, xshardSends }
+Shard A's CL:
+  - groups xshardSends by destination shard
+  - within the same cluster: pushes [Alice → Bob, 100] directly to
+    shard B's CL (gRPC, replacing current AddXshardTxListRequest)
+  - cross-cluster: nothing extra; the produced minor block already
+    has xshardSends inline in its ExecutionPayload, and standard
+    minor-block gossip (forwarded by master) carries it to other
+    clusters' CLs
+  - sends AddMinorBlockHeader(A_101) to master (separate path)
 
-Master:
-  - Adds mheader to whitelist (as today)
-  - Stores xshardSends keyed by mheader hash
-  - When root block R_500 confirms A_101, the xshardSends become routable
-  - Master appends them to each destination shard's pending queue
+Shard B's CL:
+  - receives the push, stores entries keyed by A_101's mheader hash
+  - holds them until A_101 is root-confirmed
+
+Master (control plane, in parallel):
+  - eventually commits A_101's mheader in root block R_500
+  - broadcasts R_500 to all clusters
 
 When shard B's CL prepares its next block:
-  CL → master: GetPendingXshardDeposits(shard = B)
-  ◄── master: [Alice → Bob, 100, ...]
+  - walks R_500's mheader list from its cached cursor position
+  - identifies A_101 as a newly-confirmed source mheader
+  - drains the corresponding stored xshardSends in lex order over
+    (rootBlockHeight, mheaderIndex, sendIndex), respecting XSHARD_GAS_LIMIT_PER_BLOCK
+  - constructs xshardDeposits = [{Alice → Bob, 100, pos=(500, 0, 0)}]
+
   CL → engine_forkchoiceUpdatedV3(
       head = currentTip,
-      payloadAttributes = { ..., xshardDeposits: [Alice → Bob, 100] }
+      payloadAttributes = { ..., xshardDeposits: [{Alice → Bob, 100, pos=(500,0,0)}] }
   )
   EL pre-block hook:
-    - state.AddBalance(Bob, 100 QKC)
+    - destGasPrice (5 gwei) >= shard B's destBaseFee → deposit applies
+    - data == "" and Bob is EOA → take the EIP-4895 fast path:
+      state.AddBalance(Bob, 100 QKC)
+    - charge MIN_XSHARD_DEPOSIT_GAS (9000) at 5 gwei:
+        burn  9000 * destBaseFee   to address(0)
+        miner += 9000 * (5_gwei - destBaseFee)
+        no refund (gasUsed == gasLimit)
+    - (if Bob were a contract and data were non-empty, the hook would
+      additionally synthesize a system CALL into Bob with the leftover
+      gasLimit - 9000, see §4.6 destination-side hook)
   EL proceeds to build payload, execute local txs, etc.
 
 (On shard B's new block, Bob is credited without any tx appearing
@@ -794,7 +894,7 @@ When shard B's CL prepares its next block:
  processing.)
 ```
 
-Source side is a normal, signed, retrievable EL transaction (like an Ethereum Deposit Contract call). Destination side is a pre-block balance patch (like an Ethereum Withdrawal). The EVM is unaware of cross-shard anywhere. Master holds cursor state.
+Source side is a normal, signed, retrievable EL transaction (like an Ethereum Deposit Contract call). Destination side is a pre-block hook: balance credit for the pure-transfer fast path (like an Ethereum Withdrawal), system-level CALL when the deposit carries calldata. The EVM proper is unaware of cross-shard anywhere. The xshard payload flows source CL → destination CL directly; master commits the source mheader for ordering and confirmation but never carries the payload, and the cursor is implicit in each block's `xshardDeposits`.
 
 ### 5.4 Scenario D — Root reorg triggering minor reorg
 
@@ -822,25 +922,21 @@ Slave.AddRootBlock(rootBlock):
         └─ update tip
 ```
 
-The most complex and bug-prone segment in the current codebase. Xshard application, root pointer update, cascade reorg, and resync triggering are all entangled.
+Xshard application, root pointer update, cascade reorg, and resync triggering are all entangled in `MinorBlockChain.AddRootBlock`.
 
 #### Proposed
 
 ```
-Master detects root reorg, computes new canonical root chain
+Master detects root reorg, broadcasts new canonical root chain
+(unchanged AddRootBlock gRPC, now received by Shard CL instead of slave)
 
-For each affected shard, master computes:
-  ├─ last valid minor block on the new root line (via mheader commitments)
-  ├─ new set of xshardDeposits from the new root line
-  └─ (possibly) list of minor blocks to re-apply
+Shard CL.AddRootBlock(rootBlock):
+  - update local view of canonical root chain
+  - check if current minor tip's prev_root anchor is still on canonical
+  - if not, find last minor block whose root anchor is still canonical
+    (= lastValidMinor)
 
-Master → Shard CL: ReorgForNewRoot {
-    revertToMinor: hashOfLastValidMinor,
-    newXshardDeposits: [...],
-    subsequentBlocks: [...]
-}
-
-Shard CL orchestrates:
+Shard CL orchestrates locally:
 
   (1) Revert phase:
       CL → engine_forkchoiceUpdatedV3(
@@ -850,16 +946,17 @@ Shard CL orchestrates:
       EL: uses built-in state rewind (standard geth capability)
           to roll state back to lastValidMinor
 
-  (2) New block application phase (if any):
-      for each subsequentBlock:
-          CL → engine_newPayloadV3(subsequentBlock w/ xshardDeposits)
-          EL: pre-block applies deposits, executes, writes state
-          CL → engine_forkchoiceUpdatedV3(head = subsequentBlock, null)
+  (2) Cursor recompute:
+      Cached cursor is invalidated; recovered by inspecting
+      lastValidMinor.xshardDeposits (most recent non-empty entry walking back).
 
-Shard CL → master: ReorgComplete
+  (3) Re-derive xshardDeposits for subsequent blocks under the new
+      root line, in the same way as normal block production (§4.6).
+      Resync from peers any subsequent canonical minor blocks that
+      no longer exist locally.
 ```
 
-The entangled code in `MinorBlockChain.AddRootBlock` becomes orchestration in Shard CL. State rewind is geth's native capability — no custom reorg code. Xshard deposit application uses the same hook as normal block production.
+The entangled code in `MinorBlockChain.AddRootBlock` becomes orchestration in Shard CL. State rewind is geth's native capability — no custom reorg code. Xshard deposit re-derivation uses the same lex-order scan as normal block production. Master broadcasts the new root tip but does not compute or carry per-shard reorg payloads.
 
 ---
 
@@ -867,47 +964,19 @@ The entangled code in `MinorBlockChain.AddRootBlock` becomes orchestration in Sh
 
 ### 6.1 Pros
 
-**Substantially thinner geth divergence.** After rearchitecture, the QKC-specific patches against upstream geth are confined to a small number of well-scoped hooks (pre/post-block for xshard, system contract predeploy, PoSW data query). This is the primary motivation for the rewrite.
+**Thin geth divergence, tractable upstream tracking.** QKC-specific patches collapse to a small set of well-scoped hooks (pre/post-block for xshard, system contract predeploy, PoSW data query). EVM upgrades, EIPs, and security patches arrive by rebasing rather than re-porting. This is the primary motivation; longer-term benefits (crypto upgrades, client diversity) follow from the same boundary, see §2.2.
 
-**Keeping up with upstream geth becomes practical.** EVM upgrades, EIPs, performance improvements, and security patches can be adopted by rebasing rather than re-porting. This is by far the highest-value immediate outcome. See §2.2 for longer-term strategic benefits (crypto upgrades, client diversity) that extend from the same design choice.
-
-**Clean separation of concerns.** Consensus and execution are separated by the Engine API boundary. Every consensus decision has a clear home — master for root, shard CL for shards. Execution is vanilla geth.
-
-**Ecosystem compatibility.** 20-byte addresses, single native token, standard EIP-1559 transactions, and standard typed tx format mean wallets (MetaMask, WalletConnect), Solidity toolchains, block explorers, and debuggers work without QKC-specific adapters. Existing contract bytecode is portable.
-
-**Master and sync code are largely preserved.** Current `cluster/master/*`, `cluster/sync/*`, `account/*`, `serialize/*`, and the pure-algorithm consensus packages (`consensus/ethash`, `consensus/qkchash`, `consensus/posw`) can be lifted into the new architecture with minor adaptation. The new work concentrates in building Shard CL.
-
-**Better testability.** Shard CL can be tested against a mock EL. Shard EL (upstream geth) benefits from Ethereum's entire test suite. Integration tests could, in principle, swap in alternative EL implementations (Erigon, Besu) with matching extensions.
-
-**Root-reorg complexity collapses.** The most complex and bug-prone code in the current codebase — `MinorBlockChain.AddRootBlock` — largely disappears. State rewind becomes geth's responsibility (via `engine_forkchoiceUpdated`), and CL becomes pure orchestration.
-
-**Alignment with modern Ethereum architecture.** Post-rearchitecture, GoQuarkChain's shape mirrors Ethereum's CL/EL separation, with an additional root coordination layer (master). This makes the project easier to reason about for engineers familiar with post-merge Ethereum and opens paths for future feature sharing.
+**Ecosystem compatibility.** Standard 20-byte addresses, single native token, EIP-1559 typed transactions. Wallets, explorers, Solidity tooling, and debuggers work without QKC-specific adapters; existing contract bytecode is portable.
 
 ### 6.2 Cons
 
-**Regenesis is required.** This is a significant product decision. Existing QKC holders, dApps, and contracts must migrate. Historical transaction history is not preserved beyond snapshot-for-balance purposes. This has community and UX costs outside the engineering scope.
+**Regenesis is required.** Existing QKC holders, dApps, and contracts must migrate. Historic transaction history is not preserved beyond a balance snapshot. This is the dominant cost — community, UX, and product effort outside engineering scope.
 
-**Loss of EOA-to-contract xshard with calldata.** Current QKC lets an EOA submit a cross-shard tx whose `to` is a contract on another shard and whose `data` triggers that contract on the destination shard. The proposed `XshardSend.send(to, destShard)` is payable-only, so this capability goes away; cross-shard contract interaction must be rebuilt with bridge/relayer patterns. (Contract-to-contract mid-execution xshard was never supported in the current design — the EVM's `CALL` opcode has no shard awareness — so nothing is lost there.)
-
-**Multi-native-token removal.** Projects relying on QKC's native multi-token support must migrate to ERC-20 contracts. Fee payment in alternative tokens is lost unless reimplemented via meta-transaction patterns.
-
-**Shard CL is new code to build and operate.** Although most of its logic can be lifted from existing GoQuarkChain slave code (PoSW, difficulty, fork choice, sync), it is a non-trivial module with its own test coverage, deployment, and monitoring story.
-
-**Engine API performance overhead.** Every Engine API call is a round-trip (HTTP or IPC). For QKC's block times this is not a bottleneck, but it is a measurable latency addition compared to an in-process function call. It should fit comfortably within the block budget, but it is real and should be monitored.
-
-**Master becomes a more central xshard router.** In the current design, xshard lists flow directly between slaves. In the proposed design, they flow through master as the cursor and router. This concentrates more responsibility in master and increases its memory and bandwidth footprint. The additional cost is proportional to cross-shard volume, not full block data, so it is not expected to be a scaling bottleneck, but it does shift load.
-
-**Deterministic xshard ordering must be carefully engineered.** When master routes xshard deposits from a confirmed root block to destination shards, it must ensure deterministic ordering (e.g., by root block height, then mheader index, then `XshardSend.nonce`) so that independently-running shard CLs converge on identical deposit sequences. The cursor in block meta implicitly enforced this in the current design; the new design must enforce it explicitly in master.
-
-**Root anchor is outside Engine API's model.** `hash_prev_root_block` has no geth counterpart. Encoding it into `extraData` works, but it means EL does not validate it — CL must. This is one more thing for CL to get right.
-
-**Deployment has more moving parts.** Instead of (master + N slaves), the deployment is (master + N shard CL + N shard EL) — or, if bundled, (master + N combined binaries). Operational tooling must account for the split.
+**Shard CL is new code to build and operate.** Most logic lifts from existing slave code (PoSW, difficulty, fork choice, sync), but it is a non-trivial new module with its own tests, deployment, and monitoring story.
 
 ### 6.3 Overall Assessment
 
-The trade-off is heavily in favor of the rearchitecture **if and only if regenesis is acceptable**. If the project must preserve historical state and on-chain addresses, most of the geth divergence is structural and cannot be eliminated — a less ambitious refactor would help modestly but would not deliver the main long-term win.
-
-Given the current state of the GoQuarkChain codebase (frozen at 2018 geth, unable to inherit 7+ years of upstream improvements), the case for the full rearchitecture is strong.
+The trade-off is heavily in favor of rearchitecture **if and only if regenesis is acceptable**. Without regenesis, the geth divergence is largely structural and cannot be eliminated. Given the current fork is frozen at 2018 geth and missing 7+ years of upstream improvements, the case is strong.
 
 ---
 
@@ -916,82 +985,10 @@ Given the current state of the GoQuarkChain codebase (frozen at 2018 geth, unabl
 A full project plan is out of scope here. In broad phases:
 
 - **Phase 1 — Shard CL prototype against stock geth.** A minimal CL that can drive a single-shard geth via Engine API for basic block production and sync. No xshard yet. Proves the Engine API integration model.
-- **Phase 2 — Xshard via system contract and Engine API extensions.** Implement source/destination hooks in geth, extend Engine API, build master-side routing logic. Prove the xshard protocol end to end.
+- **Phase 2 — Xshard via system contract and Engine API extensions.** Implement source/destination hooks in geth, extend Engine API, build CL-side xshard push transport (using master as forwarding hub) and the destination-side cursor logic. Prove the xshard protocol end to end.
 - **Phase 3 — Integrate with existing master, port sync.** Connect new CL to current master code; adapt `cluster/sync` to use Engine API.
 - **Phase 4 — Regenesis tooling, testing, migration plan.** Snapshot logic, new genesis generation, migration scripts.
 - **Phase 5 — Testnet launch, monitoring, iteration.**
 - **Phase 6 — Mainnet launch.**
 
 Phases 1–3 are the technical risk; phases 4–6 are where product, community, and operations dominate.
-
----
-
-## 8. Appendix
-
-### 8.1 Engine API Methods Used
-
-Core methods (inherited from upstream, with QKC extensions to payload shapes):
-
-- `engine_forkchoiceUpdatedV3` — head update + optional payload build, with `xshardDeposits` in `payloadAttributes`.
-- `engine_newPayloadV3` — block validation and storage, with `xshardDeposits` (incoming) and `xshardSends` (outgoing) fields.
-- `engine_getPayloadV3` — retrieves the constructed payload (including `xshardSends` extracted from the system contract).
-- `engine_getPayloadBodiesByHashV1/V2`, `engine_getPayloadBodiesByRangeV1/V2` — body retrieval for sync.
-- `engine_exchangeCapabilitiesV1`, `engine_getClientVersionV1` — handshake.
-
-PoSW data is sourced via standard `eth_getBalance(coinbase, parentBlockHash)` plus CL-local computation (see §4.4).
-
-### 8.2 Divergence Mapping
-
-| Aspect | Current | Proposed |
-|---|---|---|
-| EVM / StateDB addresses | 20 bytes (already geth-compatible) | 20 bytes (unchanged) |
-| Transaction format | Custom with 6 extra fields (`NetworkId`, `FromFullShardKey`, `ToFullShardKey`, `GasTokenID`, `TransferTokenID`, `Version`) | Standard EIP-1559 / typed tx; per-shard `chainId` |
-| Multi-native-token | Integrated in StateDB + EVM | Removed |
-| Cross-shard tx source | EVM hook in `_apply_msg` | `XshardSend` predeployed system contract (EIP-7002 style) |
-| Cross-shard tx destination | In-EVM cursor, block meta commitment | Pre-block balance patch via `xshardDeposits` (EIP-4895 style); cursor in master |
-| Block header `Coinbase` | 24 bytes | 20 bytes |
-| `hash_prev_root_block` | Dedicated header field | Encoded in standard `extraData` |
-| Block meta `xshard_tx_cursor_info` | Committed in header meta | Removed; cursor state in master |
-| `MinorBlockChain.InsertChain` | Execution + validation + fork choice + DB write entangled | Split across `engine_newPayload` (execute + store) and `engine_forkchoiceUpdated` (set head) |
-| PoSW computation | In slave's consensus engine | In CL, fed by `eth_getBalance` (for stake) + CL-local block-tree walk (for recentMineCount) |
-| Wallet / RPC address format | 24-byte hex | Standard 20-byte hex |
-
-The net effect: divergences fall into a short list of well-scoped patches on geth (pre/post-block hooks, a system contract predeploy, and a data-query method) instead of the current broad modifications across the `core/`, `core/state/`, `core/vm/`, and `core/rawdb/` tree.
-
-### 8.3 File Layout Sketch
-
-```
-goquarkchain/
-├── cmd/
-│   ├── master/              // master binary (largely unchanged)
-│   ├── shardcl/             // new: shard CL binary
-│   └── shardel/             // optional: pre-configured geth binary with QKC patches
-├── master/                  // mostly unchanged
-├── shardcl/                 // NEW: shard CL implementation
-│   ├── consensus/           // PoW, PoSW, difficulty (lifted from current consensus/)
-│   ├── forkchoice/          // fork choice logic
-│   ├── engineclient/        // Engine API client wrapper
-│   ├── sync/                // synchronizer (lifted from cluster/sync/)
-│   ├── xshard/              // xshard orchestration
-│   └── master_conn/         // gRPC to master (lifted from cluster/slave/)
-├── patches/geth/            // NEW: patch set applied on top of upstream
-│   ├── xshard_deposits.patch
-│   ├── xshard_sends.patch
-│   ├── posw_info.patch
-│   └── xshard_contract.patch
-├── vendor/go-ethereum/      // or via go.mod replace directive — upstream geth
-└── ... (existing utility packages: account, serialize, etc.)
-```
-
-### 8.4 Glossary
-
-- **CL** — Consensus Layer. Responsible for consensus decisions (fork choice, difficulty, seal, validation before execution).
-- **EL** — Execution Layer. Responsible for EVM execution, state maintenance, tx pool.
-- **Engine API** — The JSON-RPC interface between CL and EL, standardized by Ethereum.
-- **PoSW** — Proof of Staked Work. QKC's consensus modification where staked balances earn a difficulty divider.
-- **Regenesis** — Restarting a blockchain with a new genesis block, migrating balances from a snapshot of the old chain.
-- **Xshard** — Cross-shard transaction.
-- **Root chain** — The outer chain that confirms minor block headers from all shards.
-- **Minor chain** — One shard's chain.
-- **Master** — The process running root chain consensus and coordinating shards.
-- **Slave** — In current architecture, the process running shard execution. In the proposed architecture, replaced by a (Shard CL + Shard EL) pair.
