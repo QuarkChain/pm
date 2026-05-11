@@ -15,7 +15,7 @@ This document specifies a rearchitecture that:
 2. **Introduces a CL/EL split** inside the existing Slave binary **using an embedded geth library**, with a clean Go interface boundary between consensus logic (CL) and execution logic (EL).
 3. **Avoids regenesis** by implementing a true hard fork: a single Slave binary processes both pre-fork blocks (LegacyEL, existing code) and post-fork blocks (ModernEL, embedded upstream geth) based on the referenced root block height.
 4. **Minimizes geth divergence** to 6 targeted patches, so future upstream geth upgrades can be applied by a `git merge` with conflicts limited to those 6 files.
-5. **Preserves existing xshard semantics**: distribution remains slave-to-slave TCP, gas is carried by the tx owner, execution order and results are unchanged. The internal mechanism migrates from EVM hooks to a system contract + OP-style unsigned system transaction.
+5. **Preserves existing xshard semantics**: distribution remains slave-to-slave TCP, gas is carried by the tx owner, execution order and results are unchanged. See §8 for the xshard redesign specification.
 
 ---
 
@@ -121,7 +121,7 @@ type ExecutionLayer interface {
     NewPayload(ctx context.Context, payload *ExecutionPayload) (PayloadStatus, error)
     ForkchoiceUpdated(ctx context.Context, state ForkchoiceState, attrs *PayloadAttributes) (ForkchoiceResult, error)
     GetPayload(ctx context.Context, id PayloadID) (*ExecutionPayload, error)
-    GetPoSWInfo(ctx context.Context, coinbase common.Address, blockNumber uint64) (*PoSWInfo, error)
+    GetBalance(ctx context.Context, address common.Address, blockNumber uint64) (*big.Int, error)
 }
 ```
 
@@ -129,7 +129,7 @@ Method signatures mirror Engine API semantics. Both LegacyEL and ModernEL implem
 
 ### 4.4 Shard CL Responsibilities
 
-- PoSW difficulty computation (calls `GetPoSWInfo` on EL)
+- PoSW difficulty computation (calls `GetBalance` on EL to look up coinbase stake)
 - Fork choice (total difficulty comparison, drives EL via `ForkchoiceUpdated`)
 - Seal loop (PoW mining, template refresh every ~2s)
 - xshard orchestration (source-side extraction, destination-side injection)
@@ -310,12 +310,7 @@ func (s *stateObject) load() {
         s.data.Balance = legacy.TokenBalance[NATIVE_TOKEN_ID]
         s.data.Nonce   = legacy.Nonce
         if hasNonNativeBalances(legacy) {
-            s.legacyNonNativeBalances = legacy.NonNativeBalances
-            // Mark dirty immediately to guarantee commit() is called this block.
-            // Without this, a read-only access would leave the account in legacy
-            // encoding on disk, causing scheduleMint to fire again next block
-            // (double-mint). Forcing commit() converts to modern format in one pass.
-            s.db.journal.dirty(s.address)
+            // lazy load no native token here ...
         }
     } else {
         s.data = decodeModernAccount(raw)
@@ -368,11 +363,15 @@ func (s *stateObject) load() {
 }
 ```
 
-`scheduleMint` executes at block commit time (after all transactions), so the ERC-20 balance is available starting from the **next block**.
+`scheduleMint` executes in the **post-block hook** (P2 patch, `core/state_processor.go`), after all user transactions have been processed and all per-transaction journals have been closed. It is a direct `stateDB.AddBalance` / `stateDB.SetState` write on the ERC-20 contract — no EVM execution, no gas cost.
 
-**Note**:
-- A user's first post-fork transaction — any transaction, not just one involving non-native tokens — triggers the migration for their account. If that first transaction happens to involve a non-native token ERC-20 operation, it may fail because the ERC-20 balance has not yet been minted. The user simply needs to resubmit; the second transaction will succeed.
-- Alternative approaches (e.g., inline synchronous mint inside `load()`, or an explicit `claimMigration()` entry point) can eliminate this one-block delay but add implementation complexity.
+**Journal interaction**: The mint runs outside any transaction's snapshot/journal scope. No user transaction can revert it. It is not wrapped in a `stateDB.Snapshot()` / `RevertToSnapshot()` pair; the write is applied unconditionally before the block's state is committed to the trie.
+
+**Reorg/revert**: On a chain reorg the entire block's stateDB is discarded (the trie commit never happened or is rolled back via `stateDB.Reset()`). The mint is reverted along with all other state changes in that block — no special handling is needed beyond the normal block-discard path.
+
+**Must succeed**: Because `scheduleMint` writes directly to storage (not via EVM), there is no EVM revert path. The operation is guaranteed to succeed. The minted ERC-20 balance is visible starting from the **next block** (after `state.Commit()` finalises the trie).
+
+**Note**: A user's first post-fork transaction triggers the migration for their account. If that first transaction involves a non-native token ERC-20 operation, it may fail because the ERC-20 balance has not yet been minted (mint fires at end of that block). The user simply needs to resubmit; the second transaction will succeed.
 
 ### 6.4 Migration Summary
 
@@ -479,193 +478,7 @@ By root block N both queues are empty.
 
 ## 8. xshard Redesign
 
-### 8.1 Design Constraints
-
-- External interface semantics unchanged (receiving contract sees same `msg.sender`, `msg.value`, `calldata`)
-- Execution order unchanged (xshard deposits execute before regular txs)
-- Gas model unchanged (tx owner carries gas via `GasRemained` / `GasPrice`; destination coinbase earns fee)
-- Slave-to-slave TCP distribution mechanism unchanged
-- Master xshard routing: unchanged
-- Pre-fork xshard: LegacyEL handles completely, zero changes
-
-### 8.2 Current Gas Model (Reference)
-
-Source side (`state_transition.go`):
-- Intrinsic gas includes `GtxxShardCost`
-- `GasRemained = msg.Gas() - intrinsicGas` is passed to destination
-- Source coinbase is charged `(intrinsicGas - GtxxShardCost) * gasPrice`
-
-Destination side (`state_processor.go`):
-- `GtxxShardCost * GasPrice` → destination coinbase (fee)
-- `GasRemained` → used for EVM execution
-- Block-level `XShardGasLimit` caps total xshard processing per block
-
-### 8.3 Source Side: XshardSend System Contract
-
-Pre-deployed at a fixed address (`0x0000000000000000000000000000000071736E64`, ASCII "xsnd" right-padded), activated at `QKCForkRootHeight`:
-
-```solidity
-contract XshardSend {
-    struct Send {
-        address from;
-        address to;
-        uint256 value;       // transfer amount only (NOT including gas reserve)
-        uint32  destShard;
-        bytes   data;
-        uint64  gasLimit;    // gas budget for destination EVM execution (= GasRemained)
-        uint256 gasPrice;    // tx.gasprice — used to compute GtxxShardCost fee on destination
-        uint64  nonce;
-    }
-
-    Send[] internal queue;
-    uint64 internal nextNonce;
-
-    event XshardRequest(address indexed from, address indexed to,
-                        uint256 value, uint32 destShard, uint64 nonce);
-
-    // msg.value = transfer amount + (gasLimit + GtxxShardCost) * tx.gasprice
-    // The gas reserve is burned here; destination coinbase earns GtxxShardCost * gasPrice.
-    function send(address to, uint32 destShard,
-                  bytes calldata data, uint64 gasLimit) external payable {
-        require(destShard != CURRENT_SHARD_ID, "same-shard: use local transfer");
-        uint256 gasReserve = uint256(gasLimit + GTXX_SHARD_COST) * tx.gasprice;
-        require(msg.value >= gasReserve, "insufficient gas reserve");
-        uint256 transferValue = msg.value - gasReserve;
-        queue.push(Send(msg.sender, to, transferValue, destShard, data, gasLimit, tx.gasprice, nextNonce));
-        emit XshardRequest(msg.sender, to, transferValue, destShard, nextNonce++);
-    }
-}
-```
-
-**geth patch — post-block hook** (`core/state_processor.go`):
-
-```go
-func extractXshardSends(state *StateDB) []XshardSend {
-    sends := readQueueFromStorage(state, XshardSendAddr) // 1. get all xshard sends
-    clearQueueStorage(state, XshardSendAddr)             // 2. clear sends from queue
-    state.SetBalance(XshardSendAddr, big.NewInt(0))      // 3. value burned here, credited on dest
-    return sends                                         // return sends to Shard CL
-}
-```
-
-**Pre-deployment of system contracts:** `TokenMigrationRegistry` is deployed as a regular transaction on LegacyEL before the fork; its storage state persists via lazy migration into ModernEL. `XshardSend` is not a user-deployed contract — `ShardManager.initModernEL()` injects it directly into the state trie (at its fixed address with the compiled bytecode and zero initial balance) before the first post-fork block executes. This injection is deterministic and consensus-critical: all nodes must produce the same genesis state for ModernEL.
-
-Alice's xshard tx is a **standard EIP-1559 tx** — signed, has a receipt, visible in block explorers.
-
-### 8.4 Destination Side: XShardDepositTx (OP-style System Transaction)
-
-New EIP-2718 tx type `0x71` (QKC xshard deposit):
-
-```go
-type XShardDepositTx struct {
-    From      common.Address  // original sender (source shard)
-    To        common.Address  // recipient (EOA or contract)
-    Value     *big.Int        // transfer amount
-    Data      []byte          // calldata — passed through in full
-    GasLimit  uint64          // corresponds to GasRemained in legacy model
-    GasPrice  *big.Int        // corresponds to GasPrice in legacy model
-    // Position (for consensus verification)
-    SourceShard     uint32
-    RootBlockHeight uint64
-    MheaderIndex    uint32
-    SendIndex       uint32
-    // No signature fields
-}
-```
-
-**Execution semantics:**
-- Full EVM execution (not just `AddBalance`) — contracts can receive xshard calls with calldata
-- **Gas accounting** (matches legacy `ApplyCrossShardDeposit` model):
-  1. Protocol pre-credits `From` with `Value + GasLimit * GasPrice` on the destination shard (`Value` so the EVM CALL can transfer it to `To`; `GasLimit * GasPrice` so standard geth gas deduction works; both are consensus-guaranteed — source already burned the full amount)
-  2. Standard geth gas deduction: `GasLimit * GasPrice` taken from `From` upfront
-  3. EVM executes; `gasUsed * GasPrice` → coinbase
-  4. Refund: `(GasLimit - gasUsed) * GasPrice` → `From`
-  5. Cross-shard fee: `GtxxShardCost * GasPrice` → coinbase (always, even on failure)
-- **EIP-1559 base fee bypass**: type `0x71` skips `GasPrice >= baseFee` validation. `GasPrice` is committed on source and only used to compute fees; it does not interact with EIP-1559 base fee mechanics.
-- **Failure handling**: if EVM execution fails (out-of-gas, revert), the block is NOT invalidated. The deposit is consumed, a failure receipt (`status=0`) is recorded, remaining gas refunded to `From`, and `GtxxShardCost * GasPrice` still goes to coinbase.
-- Executed before all regular txs in the block
-- Appears in `block.transactions`, visible to block explorers
-- `msg.sender = From`, `msg.value = Value`, `calldata = Data` — identical to legacy xshard
-
-**geth patch — pre-block injection** (`core/state_processor.go`):
-
-```go
-// applyXshardDeposits applies deposits in order, stopping if the running gas total
-// would exceed xshardGasLimit. Returns actual gas consumed for CrossShardGasUsed.
-// Remaining deposits are not dropped — the CL must not advance the cursor past
-// the last applied deposit; they are carried into the next block.
-func applyXshardDeposits(deposits []XShardDepositTx, env *EVM, state *StateDB, xshardGasLimit uint64) (crossShardGasUsed uint64) {
-    for _, d := range deposits {
-        if crossShardGasUsed+d.GasLimit > xshardGasLimit {
-            break  // cap reached; remaining deferred to next block
-        }
-        gasUsed, _ := applyTransaction(env, state, toMessage(d), skipSigVerification)
-        crossShardGasUsed += gasUsed
-    }
-    return
-}
-```
-
-### 8.5 Distribution: Slave-to-Slave TCP (Unchanged)
-
-Post-fork, Shard CL reads `xshardSends` from the `ExecutionPayload` and passes them to the Slave layer. The Slave distributes to neighbor slaves via the existing `AddXshardTxListRequest` TCP mechanism. Only the payload format changes (new `XshardSend` struct vs old `CrossShardTransactionDeposit`); the connection management and gRPC method are unchanged.
-
-### 8.6 Cursor Management
-
-Pre-fork and post-fork: cursor committed in `MinorBlockMeta.XShardTxCursorInfo` — the last `(RootBlockHeight, MheaderIndex, SendIndex)` processed in that block.
-
-Post-fork, the Shard CL constructs the `XShardDepositTx` list before calling `ForkchoiceUpdated`, so it knows the end cursor position at block-build time. After block execution, the CL writes this position into `MinorBlockMeta.XShardTxCursorInfo` when finalizing the block.
-
-**Crash recovery**: read `XShardTxCursorInfo` from the canonical tip's Meta. Since the block is already persisted in DB, no scanning is needed. If the shard just forked and no deposit blocks exist yet, initialize cursor to `(QKCForkRootHeight, 0, 0)`.
-
-Consensus verification: each node independently derives the expected `XShardDepositTx` list for a given block from the canonical root chain history (deterministic ordering: `(rootBlockHeight, mheaderIndex, sendIndex)` lexicographic). Blocks with incorrect deposit lists are rejected.
-
-### 8.7 Post-fork Flow Summary
-
-```
-Alice calls XshardSend.send(Bob, shardB, calldata, gasLimit) on shard A
-  [standard EIP-1559 tx, value = amount + (gasLimit + GtxxShardCost) * gasPrice]
-  ┌─ msg.value breakdown ──────────────────────────────────────────┐
-  │  transferValue = amount                                        │
-  │  gasReserve    = (gasLimit + GtxxShardCost) * gasPrice (burned)│
-  └────────────────────────────────────────────────────────────────┘
-  EVM executes normally → XshardSend contract appends to queue
-  post-block hook: extractXshardSends() clears queue, burns contract balance
-                → sends[] placed in ExecutionPayload.xshardSends
-
-Shard A CL reads xshardSends
-  → Slave distributes via TCP to Slave B (unchanged mechanism)
-  → CL reports to Master via AddMinorBlockHeader (xshardSends piggybacked)
-
-Root block confirms A's minor block
-
-Shard B CL, building next block:
-  → reads pending deposits from cursor
-  → constructs XShardDepositTx list
-  → passes to ModernEL via ForkchoiceUpdated.payloadAttributes.xshardDeposits
-
-ModernEL executes XShardDepositTx before regular txs:
-  pre-step: protocol credits Alice (From) with amount + gasLimit * gasPrice on shard B
-            (amount: so Alice can transfer Value to Bob via EVM CALL;
-             gasLimit * gasPrice: so standard geth gas deduction from sender can proceed)
-  EVM execution:
-  → gasLimit * gasPrice deducted from Alice (From) upfront (gas purchase)
-  → EVM call: msg.value = amount (Value) → Bob; calldata executed
-  → gasUsed * gasPrice → coinbase (execution fee)
-  → (gasLimit - gasUsed) * gasPrice refunded to Alice (From)
-  → GtxxShardCost * gasPrice → coinbase  (cross-shard fee, always paid)
-  ┌─ value balance check ──────────────────────────────────────────────────┐
-  │  shard A burned:  amount + (gasLimit + GtxxShardCost) * gasPrice       │
-  │  shard B creates: amount                      → Bob  (EVM Value)       │
-  │                   gasUsed * gasPrice           → coinbase              │
-  │                   (gasLimit-gasUsed)*gasPrice  → Alice (gas refund)    │
-  │                   GtxxShardCost * gasPrice     → coinbase              │
-  │  total created  = amount + (gasLimit + GtxxShardCost) * gasPrice  ✓    │
-  └────────────────────────────────────────────────────────────────────────┘
-  failure case: EVM reverts or out-of-gas → Bob receives nothing (amount stays
-                in Alice's balance in chain B after refund), GtxxShardCost * gasPrice still
-                → coinbase, remaining gas refunded to Alice; block not invalidated
-```
+The xshard design is independent of the regenesis concern and is not covered here. See https://github.com/QuarkChain/pm/pull/137 for the full specification.
 
 ---
 
@@ -779,9 +592,9 @@ CL fills these fields before passing payload to EL. EL does not interpret Extra 
 | `MetaHash` | **Not present post-fork.** `stateRoot`/`txRoot`/`receiptHash` are committed directly as geth Header fields; `MetaHash` is pre-fork only. |
 | `Time` | = geth `Time` |
 | `Difficulty`, `Nonce`, `Bloom`, `MixDigest` | = geth equivalents |
-| `CrossShardGasUsed` (Meta) | Sum of `gasUsed` for all `XShardDepositTx` in this block. `XShardDepositTx` has its own separate gas budget (`XShardGasLimit`), so xshard gas consumption must be tracked independently for consensus validation (verifiers confirm `CrossShardGasUsed ≤ XShardGasLimit`). |
-| `XShardTxCursorInfo` (Meta) | Last `(RootBlockHeight, MheaderIndex, SendIndex)` processed in this block — committed to Meta by the Shard CL at block finalize time, same as pre-fork.|
-| `XShardGasLimit` (Meta) | `shardConfig.XShardGasLimit` — a fixed protocol parameter per shard, not derived from block execution; Shard CL passes it to ModernEL via `PayloadAttributes` |
+| `CrossShardGasUsed` (Meta) | Total gas consumed by xshard deposits in this block; tracked separately from regular tx gas for consensus validation (`CrossShardGasUsed ≤ XShardGasLimit`). See §8. |
+| `XShardTxCursorInfo` (Meta) | Last xshard deposit position processed in this block — committed to Meta by the Shard CL at block finalize time, same as pre-fork. See §8. |
+| `XShardGasLimit` (Meta) | `shardConfig.XShardGasLimit` — a fixed protocol parameter per shard; Shard CL passes it to ModernEL via `PayloadAttributes`. |
 
 > **Why `CoinbaseAmount` is not needed post-fork**: Pre-fork, This was necessary because QKC's `TokenBalances` supports multi-token rewards and there is no implicit consensus rule for the amount. Post-fork, ModernEL follows standard geth: the block reward is applied by the P2 post-block hook directly to the coinbase address as a state mutation, and consensus validates the state root (which reflects the reward). The amount no longer needs to be committed in the header — the state root is the proof.
 
@@ -811,9 +624,9 @@ The QuarkChain fork of upstream geth carries 6 targeted patches:
 
 | Patch | File(s) | Description |
 |---|---|---|
-| P1: `XShardDepositTx` type | `core/types/transaction.go` | New EIP-2718 type `0x71`; skip signature verification; skip EIP-1559 base fee check; encode/decode |
-| P2: pre/post-block hooks | `core/state_processor.go` | Pre-block: apply `XShardDepositTx` list with `XShardGasLimit` cap; return `CrossShardGasUsed`; post-block: extract `XshardSend` contract queue, clear storage, burn balance; apply block reward (`PayloadAttributes.blockReward`) to coinbase address |
-| P3: Engine API extensions | `eth/catalyst/api.go` | `ExecutionPayload` adds `xshardDeposits []XShardDepositTx` and `xshardSends []XshardSend` fields; `PayloadAttributes` adds `blockReward *big.Int` and `xshardGasLimit uint64`; new `engine_getPoSWInfoV1` method |
+| P1: xshard deposit tx type | `core/types/transaction.go` | New unsigned EIP-2718 tx type for xshard deposits; skip signature verification and EIP-1559 base fee check. See §8. |
+| P2: pre/post-block hooks | `core/state_processor.go` | Pre-block: apply xshard deposits with gas cap; post-block: extract xshard send queue, burn balance, apply block reward to coinbase. See §8. |
+| P3: Engine API extensions | `eth/catalyst/api.go` | `ExecutionPayload` and `PayloadAttributes` extended with xshard fields and `blockReward`; new `engine_getBalanceV1` method for PoSW stake lookup. See §8. |
 | P4: Lazy state migration | `core/state/stateobject.go` | `load()`: detect legacy `TokenBalance` Map encoding, extract native balance, schedule non-native ERC-20 mints; `commit()`: always write modern format |
 | P5: Extra data size limit | `params/protocol_params.go` | Increase `MaximumExtraDataSize` from 32 to 64 bytes; QKC `Extra` requires minimum 36 bytes (`PrevRootBlockHash` 32 + `Branch` 4, §9.2); geth's default 32-byte cap would reject valid post-fork blocks |
 | P6: Txpool type filter | `core/txpool/txpool.go` | Reject type 0x00 (legacy) and type 0x01 (EIP-2930) at txpool entry; only type 0x02 (EIP-1559) accepted in ModernEL; prevents miners from accidentally including incompatible txs |
