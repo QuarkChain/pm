@@ -6,8 +6,6 @@ Token Migration ProxyAdmin: 0x057A5B2E5dc34f4B666bb2ff80Ebd64E22B037De
 Token Migration Proxy: 0x6309Ab1d95b12FbBd256FC1aEe9154A18fC961d1
 tQKC ERC20 Token: sep:0xC359FCF9328143f798C197B86856e656411aBC48
 
-ERC20 Bridge: https://bridge.delta.testnet.l2.quarkchain.io
-
 Faucet: https://qkc-l2-delta-faucet.eth.sep.web3gateway.dev
 
 Explorer：https://explorer.delta.testnet.l2.quarkchain.io or http://65.109.69.98
