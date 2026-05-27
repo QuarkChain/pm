@@ -51,26 +51,28 @@ The new slave is split into two components, matching post-merge Ethereum archite
         └────────────────────────────────────┘
 ```
 
-CL is the focus of this rewrite. EL is a patched fork of upstream geth; this document doesn't deep-dive the geth patches (they are mechanical: pre/post-block hooks for xshard, system contract predeploy, PoSW data sourcing). The CL ↔ EL interface is the standardized Ethereum Engine API plus standard `eth_*` JSON-RPC.
+CL is the focus of this rewrite. EL is a patched fork of upstream geth. Because regenesis is out of scope (§1.3), the geth patches preserve QKC's existing on-chain formats and semantics — broadly:
 
-### 1.3 Regenesis is in scope
+- **Block format** — header + body layout matches today's QKC `MinorBlock`/`MinorBlockHeader` (including `PrevRootBlockHash`, `CoinbaseAmount`, etc.)
+- **Transaction format** — preserves QKC fields like `from_full_shard_key`, `to_full_shard_key`, `gas_token_id`, `transfer_token_id`, and the existing signature/serialization conventions
+- **Multi-native-token** — balances, transfers, and gas payments stay multi-token (not collapsed to a single native token)
+- **Xshard apply mechanism** — pre/post-block hooks consuming/emitting deposits in the existing wire format
 
-To minimize the geth patch surface, the rewrite **adopts regenesis** so that:
-- `MinorBlockHeader` is byte-identical to `core/types.Header` (with `PrevRootBlockHash` packed into `extraData`).
-- Transaction format follows standard EIP-1559 typed transactions (no multi-token, no `from_full_shard_key`/`to_full_shard_key` extra fields).
-- Multi-native-token is removed; only a single native token. Other tokens become ERC-20 contracts.
-- The 24-byte QKC account address (20-byte Recipient + 4-byte FullShardKey) becomes the standard 20-byte address at the user-facing surface. EVM internals already use 20-byte addresses, so contract bytecode is portable.
+This document does **not** detail these geth patches — they're a separate workstream. The CL/EL boundary is the standardized Ethereum Engine API plus standard `eth_*` JSON-RPC; the CL only handles consensus-level concerns (PoW seal computation, PoW/PoSW verification, root-block integration, xshard plumbing). Header/body/tx layout and serialization live behind the EL boundary.
 
-**Trade-offs**:
+### 1.3 Regenesis is explicitly out of scope
 
-| Benefit | Cost |
+Regenesis (export state, build a new genesis aligned with vanilla geth's formats, restart) is **not** in scope for the rewrite.
+
+| Cost of regenesis | Why it matters here |
 |---|---|
-| EL is near-vanilla geth (~500–1000 LOC of patches on top of upstream) | Master needs ~2400 LOC of changes to accept the new wire-level header type |
-| Future EVM/EIP upgrades come from `git rebase` | Need to write regenesis tooling (balance snapshot, new genesis generation, migration scripts) |
-| Standard tx tooling (MetaMask, Solidity, block explorers) works out of the box | Historical tx history is not preserved beyond the snapshot |
-| Single 20-byte address simplifies tooling | Cross-shard tx capability is preserved but the wire format changes |
+| Operational risk during the cutover | The chain must be paused, state exported, new genesis produced, all node operators upgraded, chain restarted — a multi-step orchestration where any failure rolls back work and risks split state |
+| Coordination cost with stakeholders | Exchanges and node operators all have to migrate in lockstep |
+| Loses the strongest correctness test we have | Without regenesis, the new slave can **replay every historical block** and assert that resulting state hashes match the existing chain. This catches any divergence in EVM/consensus behavior between the Python implementation and the new Go CL + patched-geth EL. Regenesis throws this test away — the new chain has no historical blocks to replay |
 
-The trade-off is favorable because the master changes are localized to a small set of header-handling sites and are mechanically replaceable, while the EL patch surface for *not* regenesis-ing would be much larger and ongoing.
+The trade-off is that patched-geth absorbs more surface area: it needs to handle QKC's existing block format (header + body layout), transaction format (with `from_full_shard_key` / `to_full_shard_key` and other QKC extensions), multi-native-token semantics, and the existing xshard apply mechanism — all preserved byte-for-byte. This document does not detail those geth patches; they're treated as a separate workstream, staged alongside the CL milestones in [§13](#13-milestones). The CL's job is restricted to consensus-related fields and the boundary plumbing.
+
+**Escape hatch**: if at any milestone the geth patch surface turns out to be unbounded or unsafe, regenesis is the fallback.
 
 ### 1.4 Deployment
 
@@ -176,18 +178,20 @@ type ShardCL struct {
 
 ### 2.4 `CLChain` — per-shard consensus-authority chain
 
-CL is authoritative for **fork-choice metadata** (canonical pointer, total difficulty, root anchor) but **not** for execution state (headers, bodies, receipts, state trie — those live in geth).
+CL is authoritative for **fork-choice decisions** (whether a given block should become head, when root tip switches, etc.) and **root-chain metadata** (root blocks, last-confirmed-mheader anchors). Execution state — headers, bodies, receipts, state trie, the canonical chain itself, TD as a header field — lives in geth.
 
 ```go
 type CLChain struct {
-    // State:
-    currentHead atomic.Value                       // common.Hash — CL's canonical tip
-    tdCache     *lru.Cache[Hash, *big.Int]         // TD by header hash
+    // In-memory state:
+    currentHead atomic.Value                       // common.Hash — cached current tip;
+                                                    // source of truth is geth (we set it via
+                                                    // engine_forkchoiceUpdated, so the cached
+                                                    // value tracks whatever we last drove)
     rootChain   *RootChainIndex                    // root blocks received via ADD_ROOT_BLOCK
-    xshardInbox *XshardInbox                       // Phase 2: received xshard sends from peer slaves
+    xshardInbox *XshardInbox                       // received xshard sends from peer slaves (xshard milestone, §13)
 
     // Injected dependencies (passed at construction, shared with ShardCL):
-    //   - ethdb.Database  for persisting state above (same instance as ShardCL.db)
+    //   - ethdb.Database  for persisting root anchors / xshard inbox / indices (same instance as ShardCL.db)
     //   - *EthClient      for header/body/receipt lookups (same instance as ShardCL.elc)
 }
 
@@ -195,7 +199,7 @@ type RootChainIndex struct {
     rootTip            common.Hash
     byHash             *lru.Cache[Hash, *types.RootBlock]
     lastConfirmedMinor common.Hash         // most recent shard mheader confirmed under rootTip;
-                                           // recovered on startup from "rb:lastm" + rootTip;
+                                           // recovered on startup from `r_last_m` + rootTip;
                                            // survives root reorgs via per-root-block persistence
 }
 ```
@@ -204,25 +208,31 @@ CLChain doesn't own a DB or an EthClient — it borrows them from the enclosing 
 
 ### 2.5 CL DB schema (per shard)
 
-Each ShardCL has its own LevelDB instance. Compact, consensus-authority-only:
+Each ShardCL has its own LevelDB instance, holding **only the QKC-specific consensus metadata that geth doesn't have**. Everything geth handles natively — full blocks, canonical-by-number, state trie, receipts, txpool, the normal-tx reverse index — is left to geth's data directory and accessed via `EthClient`. The keys we do keep use pyquarkchain's exact prefixes/encodings ([shard_db_operator.py](../quarkchain/cluster/shard_db_operator.py)), so the on-disk layout matches the existing slave.
 
-```
-Key                                     Value                       Purpose
-─────────────────────────────────────  ─────────────────────────  ────────────────────────
-"n"  + bigEndian(number)                common.Hash                 canonical by number
-"td" + hash                             *big.Int                    total difficulty
-"head"                                  common.Hash                 current canonical tip
-"rt"                                    common.Hash                 current root tip
-"rb" + hash                             *types.RootBlock            root blocks (by hash)
-"rb:lastm" + root_hash                  common.Hash                 last mheader on this shard confirmed by that root block; written at AddRootBlock time, survives root reorgs
-"ix:addr" + recipient(20B) + height(4B) + xshard_flag(1B) + idx(4B)   b""   per-address tx index; key alone encodes the location
-"ix:all"                + height(4B) + xshard_flag(1B) + idx(4B)      b""   global tx index (all txs in this shard)
-                                            (Phase 2 — xshard)
-"xs:src" + sourceMheaderHash            []XshardSend                xshard sends received from source CL, keyed by source mheader hash
-                                                                    (no separate "applied" flag — the cursor implicit in each destination block's xshardDeposits is the source of truth; kept long-term to support reorg replay)
-```
+| Key | Value | Purpose |
+|---|---|---|
+| `b"rblock_" + hash` | serialized `RootBlock` | Root blocks by hash |
+| `b"r_last_m" + root_hash` | mheader hash | Last mheader on this shard confirmed by that root block; written at AddRootBlock, survives root reorgs |
+| `b"genesis_" + root_block_hash` | serialized `MinorBlock` | Per-root-block genesis; supports root-reorg recovery across the genesis boundary |
+| `b"txindex_" + tx_hash` | `(height:4)(index:4)` | **Xshard-deposit-only**: deposit `tx_hash` → (dest mblock height, position-after-normal-txs). Normal txs are covered by geth's `eth_getTransactionByHash`; xshard receives never appear in `block.transactions[]`, so CL keeps a slim index for them. |
+| `b"tx_count_" + hash` | `uint32` BE | Cumulative tx count up through this mblock; maintained incrementally (`prev_count + len(block.tx_list)`) on each apply. Returned to master via `shard_stats`. Geth has no equivalent — computing on demand would require scanning every block. |
+| `b"index_addr_" + recipient + height + xshard_flag + idx` | `b""` | Per-address tx index; key alone encodes the location. Field widths: recipient 20B, height 4B BE, xshard_flag 1B, idx 4B BE. See [Appendix C](#appendix-c-per-recipient-tx-index) |
+| `b"index_alltx_" + height + xshard_flag + idx` | `b""` | Global tx feed (mixes in-shard txs and xshard receives, since xshard receives don't surface in geth's block-tx list) |
+| `b"xShard_" + source_mblock_hash` | `CrossShardTransactionList` | Xshard deposits received from source CL, keyed by source mblock hash |
+| `b"xr_" + dest_mblock_hash` | `CrossShardTransactionList` | Xshard deposits this destination mblock consumed; used by receipt + tx-history queries |
+| `b"xd_" + dest_mblock_hash` | `HashList` | Hash list of xshard deposits consumed by this dest mblock; used to populate `txindex_` for deposit tx_hashes |
 
-Headers, bodies, receipts, state trie, txpool — **none of these live in the CL DB**. They live in geth's data directory, addressed via `EthClient`.
+**Held by geth, not duplicated in CL DB** (compared to pyquarkchain's single-LevelDB layout, which holds them):
+- `b"mblock_"` + hash (full mblock) — patched geth holds the QKC `MinorBlock` end-to-end (header + body + meta, with all QKC-specific fields); fetch via `eth_getBlockByHash`.
+- `b"mi_%d"` % height (canonical by height) — geth's own canonical-by-number; whatever `engine_forkchoiceUpdated` set is reflected in `eth_getBlockByNumber`.
+- `b"txindex_"` for normal in-shard txs — `eth_getTransactionByHash` covers them (CL's `b"txindex_"` only stores xshard deposit hashes). Requires the patched geth's tx-lookup index to be kept un-pruned (`--history.transactions=0` or archive mode), otherwise old-tx queries return null.
+- `b"commit_"` (processed flag) — `engine_newPayload` returning VALID is the equivalent signal.
+- EVM state trie, receipts, txpool — geth's data directory.
+
+**Not stored at all** (compared to earlier drafts of this doc that proposed them):
+- `td` (total difficulty) — **doesn't apply to shard chain**. Pyquarkchain's `MinorBlockHeader` ([core.py:681](../quarkchain/core.py#L681)) has per-block `difficulty` but **no `total_difficulty` field**, and `shard_state.py` never references TD on the shard side. Shard tip-update uses height + root-anchor tie-breaker, not TD (see §10 / B.3). Only `RootBlockHeader` carries `total_difficulty`, used by master's root-chain fork choice.
+- Canonical / root tip pointers — reconstructed at startup the same way pyquarkchain does it (see [shard_state.py:279 `init_from_root_block`](../quarkchain/cluster/shard_state.py#L279)): master sends the current root tip via `CONNECT_TO_SLAVES_REQUEST`; CL looks up `b"r_last_m" + root_tip_hash` to find the last confirmed mheader for this shard, and that becomes the starting `header_tip`. Any unconfirmed mblocks mined after the last root checkpoint are discarded on restart — same behavior as pyquarkchain today.
 
 Order-of-magnitude sizing: with 10⁸ blocks and a full per-recipient tx index, the CL DB stays under ~1 GB per shard. The EL DB (geth) is whatever the equivalent Ethereum-style chain would store anyway.
 
@@ -232,12 +242,10 @@ When the reader encounters the boundary chapters below (§4–§8), each interfa
 
 | Data | Lives in | Accessed via |
 |---|---|---|
-| Block headers / bodies / receipts | EL (geth DB) | `eth_getBlockBy*`, `eth_getTransactionReceipt`, etc. |
-| Account state, storage, code | EL (geth DB) | `eth_getBalance`, `eth_getStorageAt`, `eth_getCode`, `eth_call` |
-| Tx pool | EL (geth) | `eth_sendRawTransaction`, `eth_newPendingTransactionFilter` |
-| Canonical pointer, TD, root anchor | CL DB (per-shard) | `CLChain` methods |
-| Per-recipient tx index | CL DB (per-shard) | `Indexer` |
-| Xshard inbox (Phase 2) | CL DB (per-shard) | `XshardInbox` |
+| Full mblocks (headers + bodies + meta), canonical-by-number, normal-tx index, EVM state, receipts, txpool | EL (geth DB; patched to carry QKC fields) | `eth_getBlockBy*`, `eth_getTransactionByHash`, `eth_getTransactionReceipt`, `eth_getBalance`, `eth_getStorageAt`, `eth_getCode`, `eth_call`, `eth_sendRawTransaction`, ... |
+| Root blocks + last-confirmed-mheader anchor (`rblock_`, `r_last_m`, `genesis_`) | CL DB (per-shard) | `CLChain` methods. Canonical tip / root tip are not persisted — reconstructed at startup from `r_last_m` + master's `CONNECT_TO_SLAVES_REQUEST`, matching pyquarkchain |
+| Xshard inbox + xshard-deposit tx index (`xShard_`, `xr_`, `xd_`, `txindex_`) | CL DB (per-shard) | `XshardInbox` (xshard milestone, §13) |
+| Per-recipient tx index (`index_addr_`, `index_alltx_`) | CL DB (per-shard) | `Indexer` |
 | Pending xshard deposits cursor | implicit in committed blocks | derived from CL DB + geth |
 | Cluster peer state (which peers are up) | Slave process memory | rebuilt from master's `CREATE_CLUSTER_PEER_CONNECTION` cmds |
 
@@ -257,7 +265,7 @@ The new CL has five external boundaries. Each gets a dedicated section below.
 | 4 | **CL ↔ CL xshard (direct TCP)** | ClusterConnection, 2 ClusterOps | `SlaveConnection` ([slave.py:708](../quarkchain/cluster/slave.py#L708)) | `slave_conn.go` |
 | 5 | **CL → EL (patched-geth)** | Engine API + eth_* JSON-RPC | (new — does not exist in Python slave) | `eth_client.go` |
 
-Sections 4–8 walk each boundary. Section 9 covers the in-process mining contract. Section 10 covers sync. Section 11 covers regenesis costs. Section 12 is the validation table.
+Sections 4–8 walk each boundary. Section 9 covers the in-process mining contract. Section 10 covers sync. Section 11 confirms master needs no changes. Section 12 is the validation table. Section 13 lays out the milestones.
 
 ---
 
@@ -299,7 +307,7 @@ CL receives ~30 `ClusterOp` requests from master. Defined in `MASTER_OP_RPC_MAP`
 | `GET_STORAGE_REQUEST` | `eth_getStorageAt` |
 | `GET_CODE_REQUEST` | `eth_getCode` |
 | `GAS_PRICE_REQUEST` | `eth_gasPrice` |
-| `GET_ACCOUNT_DATA_REQUEST` | Composed of `eth_getBalance` + `eth_getTransactionCount` + `eth_getCode` |
+| `GET_ACCOUNT_DATA_REQUEST` | Returns `AccountBranchData` (5 fields per shard): `transaction_count` ← `eth_getTransactionCount`; `is_contract` ← `eth_getCode` non-empty; `token_balances` ← patched-geth multi-token balance RPC (vanilla `eth_getBalance` only covers one native token); `mined_blocks` + `posw_mineable_blocks` ← CL-side PoSW computation (walk last N headers for coinbase matches + apply PoSW config to stake) |
 | `GET_TRANSACTION_LIST_BY_ADDRESS_REQUEST` | CL-local per-recipient index (populated via `eth_getBlockReceipts` after each VALID payload; see [Appendix C](#appendix-c-per-recipient-tx-index)) |
 | `GET_ALL_TRANSACTIONS_REQUEST` | Same per-recipient index, all-direction variant (see [Appendix C](#appendix-c-per-recipient-tx-index)) |
 | `GET_TOTAL_BALANCE_REQUEST` | Single-shard paginated sum: CL iterates the state trie via `debug_accountRange` (archive mode required) and returns partial sum + cursor; caller resumes until exhausted |
@@ -372,7 +380,7 @@ Defined in [quarkchain/cluster/p2p_commands.py](../quarkchain/cluster/p2p_comman
 
 ## 7. Boundary 4: Slave-to-Slave Xshard (Direct TCP)
 
-When a source shard mines a block containing cross-shard txs, the source CL pushes the xshard deposit list **directly** to the destination CL — not via master.
+When a source shard mines a block containing cross-shard txs, the source CL pushes the xshard deposit list **directly** to the destination CL — not via master. The xshard implementation mirrors pyquarkchain one-for-one: same wire opcodes, same `CrossShardTransactionDeposit` struct (multi-token, 24-byte addresses, `refund_rate`, all the existing fields), same storage-keyed-by-source-mheader, same cursor-driven apply on the destination side.
 
 ### 7.1 The connections
 
@@ -392,23 +400,27 @@ Defined in `SLAVE_OP_RPC_MAP` ([slave.py:787](../quarkchain/cluster/slave.py#L78
 
 ### 7.3 Receiving CL behavior
 
-When destination CL receives `ADD_XSHARD_TX_LIST_REQUEST(branch, source_mheader_hash, deposits)`:
-1. Verify `branch` is one of this CL's shards.
-2. Store deposits keyed by `source_mheader_hash` in CL-local rawdb (LevelDB).
-3. Wait for the source mheader to be confirmed in a root block (via `ADD_ROOT_BLOCK_REQUEST` from master).
-4. On next destination block production, xshard cursor walks newly-confirmed mheaders, picks up the stored deposits, and feeds them as `xshardDeposits` to EL via `engine_forkchoiceUpdated.payloadAttributes`.
+When destination CL receives `ADD_XSHARD_TX_LIST_REQUEST(branch, minor_block_hash, tx_list)` (handler: [slave.py:765](../quarkchain/cluster/slave.py#L765)):
 
-### 7.4 Wire format under regenesis
+1. Verify `branch` is one of this CL's shards (matches pyquarkchain's `branch not in self.shards` check).
+2. Store the deposit list keyed by source `minor_block_hash` in CL-local rawdb — the equivalent of pyquarkchain's [`ShardState.add_cross_shard_tx_list_by_minor_block_hash`](../quarkchain/cluster/shard_state.py#L1381).
+3. Wait for that source mheader to be confirmed by a root block (arrives via `ADD_ROOT_BLOCK_REQUEST` from master — see Appendix B.1).
+4. On next destination block production, the xshard cursor walks newly-confirmed source mheaders in canonical order and pulls the stored deposits, exactly as pyquarkchain's [`__run_cross_shard_tx_with_cursor`](../quarkchain/cluster/shard_state.py#L1616) does today.
+5. CL hands those deposits to geth through `engine_forkchoiceUpdated`'s `PayloadAttributesV3QKC.XshardDeposits` field (§9.1) when requesting a block template. Geth applies them (balance updates, optional CALL/CREATE) in its pre-block hook and includes them in the resulting payload, so the deposits are baked into the block being built.
 
-The `AddXshardTxListRequest` payload contains:
+The actual *application* of deposits to state happens inside patched-geth, since geth owns the EVM and state DB. The CL's role is to select which deposits are eligible (the cursor walk in step 4) and pass them across the Engine API; the in-EVM apply mechanics are a geth-patch concern.
+
+### 7.4 Wire format
+
+The `AddXshardTxListRequest` payload preserves pyquarkchain's format byte-for-byte:
 
 ```
-branch                : Branch (uint32)
-minor_block_hash      : Hash (32B)
-tx_list               : []CrossShardTransactionDeposit
+branch              : Branch (uint32)
+minor_block_hash    : Hash (32B)
+tx_list             : []CrossShardTransactionDeposit
 ```
 
-Under regenesis with the cross-shard redesign, the deposit struct simplifies (no multi-token fields, 20-byte addresses) but the request/response opcodes and overall flow stay the same. CL implements the new struct, but the master never sees these payloads (master is not in the data path).
+Where `CrossShardTransactionDeposit` ([core.py:1130](../quarkchain/core.py#L1130)) carries all existing fields — `tx_hash`, `from_address` (24B), `to_address` (24B), `value`, `gas_price`, `gas_token_id`, `transfer_token_id`, `gas_remained`, `message_data`, `create_contract`, `is_from_root_chain`, `refund_rate`. No simplification, no schema change: existing mainnet xshard txs continue to round-trip without re-encoding. Master is not in the data path for this opcode.
 
 ---
 
@@ -416,7 +428,7 @@ Under regenesis with the cross-shard redesign, the deposit struct simplifies (no
 
 ### 8.1 The Engine API surface
 
-CL drives EL through the Engine API version that matches the patched-geth fork in use (currently Fusaka-era). With regenesis we can adopt the latest stable version from day one. The method names below use V3 as an illustrative baseline; the actual version suffix on each call follows whichever fork EL is built against.
+CL drives EL through the Engine API version that matches the patched-geth fork in use (currently Fusaka-era). The method names below use V3 as an illustrative baseline; the actual version suffix on each call follows whichever fork EL is built against.
 
 | Method | When CL calls | Purpose |
 |---|---|---|
@@ -446,72 +458,50 @@ CL drives EL through the Engine API version that matches the patched-geth fork i
 
 ### 8.3 QKC extensions to payload schemas
 
-The QKC redesign extends the standard Engine API schemas as follows:
+Because regenesis is out of scope (§1.3), the Engine API surface between CL and patched-geth is **not** vanilla — it has to round-trip every QKC-specific field that the existing on-chain format already carries (PoW seal, `PrevRootBlockHash`, multi-token coinbase/balances, 24-byte addresses, xshard deposits/sends, etc.). The exact wire schema of those extensions is decided inside the patched-geth workstream; this document doesn't pin it down.
 
-```
-PayloadAttributesV3QKC = standard PayloadAttributesV3 +
-  extraData:       bytes   (carries PrevRootBlockHash, 33 bytes)
-  xshardDeposits:  []XshardDeposit   (Phase 2; cross-shard payload to apply pre-block)
+For the CL design what matters is the *categories* of data that must cross the boundary:
 
-ExecutionPayloadV3QKC = standard ExecutionPayloadV3 +
-  difficulty:      U256              (QKC PoW difficulty — schema add)
-  nonce:           uint64            (QKC PoW nonce — schema add)
-  xshardSends:     []XshardSend      (Phase 2; cross-shard payload emitted post-block by source EL)
-  // mixDigest is NOT added — the standard `prevRandao` slot carries it (see §8.4)
-```
-
-Phase 1 (single shard, no xshard yet) needs only `extraData` + the two PoW fields. Phase 2 adds the xshard fields.
-
-### 8.4 Difficulty + PoW fields
-
-Standard `ExecutionPayload` doesn't carry `Difficulty` or `Nonce` at all (post-merge they're hardcoded to 0 in geth's header reconstruction), and the `MixDigest` slot is renamed to `prevRandao` and filled with the beacon-chain RANDAO. For QKC's PoW, the design is:
-
-| Header field | How it's carried into EL | Patch to geth |
+| Category | Direction | Why CL cares |
 |---|---|---|
-| `Difficulty` | New field on `ExecutionPayloadV3QKC` | Schema extension + relax `verifyHeader`'s `Difficulty == 0` check |
-| `Nonce` | New field on `ExecutionPayloadV3QKC` | Schema extension + relax `verifyHeader`'s `Nonce == 0` check |
-| `MixDigest` | **Reused `prevRandao` slot** — CL puts the PoW mixhash there | None for the slot itself; `verifyHeader` accepts any 32-byte value here |
+| `PrevRootBlockHash` | CL → EL via `payloadAttributes` | Identifies which root-chain tip this minor block is built on (consensus check) |
+| PoW seal (`Difficulty`, `Nonce`, mixhash) | CL → EL on `newPayload` only | `getPayload` returns an unsealed template (no seal yet); CL computes `Difficulty`, the miner produces `Nonce`/mixhash, then CL hands the sealed payload back via `newPayload`. §8.4 |
+| Xshard deposits | CL → EL via `payloadAttributes` | Source-CL→destination-CL deposits applied to destination state at the next block (§7) |
+| Xshard sends | EL → CL on `getPayload` / `newPayload` | Outbound deposits the destination CL forwards to peer slaves (§7) |
 
-Reusing `prevRandao` for PoW mixhash avoids a third schema-extension point. The semantic consequence is that the EVM `PREVRANDAO` opcode (EIP-4399, opcode `0x44`, formerly `DIFFICULTY`) now returns the PoW mixhash inside contracts. Since mixhash is a 32-byte unpredictable value, this matches `PREVRANDAO`'s "source of randomness" intent; the loss is that contracts can no longer read the numeric difficulty via opcode. To be audited at regenesis time — QKC contracts using `block.difficulty` for RNG continue to work (they'll just consume mixhash instead, which is equally unpredictable); contracts using it as a numeric quantity break.
+Throughout the rest of this document `PayloadAttributesV3QKC` and `ExecutionPayloadV3QKC` are placeholder names for *whatever* extended schemas the patched-geth fork defines. Field-by-field placement (which names live where, what the wire encoding looks like) is a geth-patch concern.
 
-`engine_getPayload` returns the standard `ExecutionPayloadV3` without difficulty/nonce/prevRandao-as-mixhash — these only matter once mining is done:
+### 8.4 PoW seal across the CL/EL boundary
+
+Vanilla post-merge `ExecutionPayload` doesn't carry `Difficulty` or `Nonce` at all — geth hardcodes both to 0 in the reconstructed header — and the `MixDigest` slot is renamed to `prevRandao` and filled with beacon-chain RANDAO. QKC is PoW, so the patched-geth Engine API must:
+
+- Carry `Difficulty` / `Nonce` / mixhash across the boundary somehow (extended fields, repurposed slots, or `extraData` packing — patched-geth's call).
+- Skip the post-merge `Difficulty == 0` / `Nonce == 0` checks in `verifyHeader`, and **don't re-verify PoW** — geth trusts the seal the CL handed it (same trust model as vanilla post-merge geth with its beacon CL). `Header.Hash()` already RLP-encodes the seal fields, so the committed block hash reflects the mined values automatically.
+
+`SealHash` (the header hash *excluding* `Nonce`/`MixDigest`, which the miner runs PoW against), difficulty calculation, and PoW verification are all **CL-side** — see the lifecycle below.
+
+The high-level seal lifecycle stays the same regardless of wire choice:
 
 ```
-// Template build (CL):
-payload = engine_getPayloadV5(payloadID)       // standard schema; payload is unsealed
+// Template build (CL drives EL):
+1. CL: engine_forkchoiceUpdated(parent, payloadAttributes{ts, feeRecipient, PrevRootBlockHash, xshardDeposits, ...})
+2. EL: builds an unsealed payload (executes txs, computes stateRoot/txHash/receiptHash, leaves the seal fields empty)
+3. CL: engine_getPayload → unsealed payload returned
+4. CL: compute Difficulty out-of-band; build the partial header CL needs for SealHash
+5. CL: hand SealHash + (PoSW-adjusted) difficulty to the miner
 
-difficulty = consensus.Engine.CalcDifficulty(parent, timestamp)   // CL-local
-partialHeader = headerBridge.PayloadToHeader(payload, difficulty) // unsealed header
-sealHash      = partialHeader.SealHash()                          // excludes nonce + mixhash
-
-// Mining: PoW search over (nonce) until hash(seal || nonce) < target
-(nonce, mixhash) = miner.run(sealHash, difficulty)
+// Mining: PoW search over nonce until hash(seal||nonce) < target → produces (nonce, mixhash)
 
 // Seal-and-import (CL → EL):
-qkcPayload = ExecutionPayloadV3QKC{
-    standard:    payload,
-    difficulty:  difficulty,
-    nonce:       nonce,
-    prevRandao:  mixhash,        // reused slot
-    xshardSends: ...,
-}
-qkcPayload.blockHash = recomputeBlockHash(qkcPayload)
-engine_newPayloadV5(qkcPayload, ...)
+6. CL: assemble the sealed payload (existing payload + nonce + mixhash + difficulty)
+7. CL: verify PoW (Ethash/Qkchash) — PoW is a consensus rule, CL-side
+8. CL: engine_newPayload(sealedPayload)
+9. EL: tx execution + state/receipts validation + persist + payload-self-consistency check (recomputes Header.Hash() and rejects on mismatch — standard EL behavior, same as vanilla post-merge geth against its beacon CL)
 ```
 
-**CL's responsibility, before `engine_newPayload`**:
-1. Compute `difficulty` (consensus engine).
-2. Assemble the `ExecutionPayloadV3QKC` with `difficulty`, `nonce`, `prevRandao`-as-mixhash filled in.
-3. Compute `qkcPayload.blockHash` over the full header and stamp it on the payload.
-4. **Verify PoW** (`Ethash`/`Qkchash` hash < target). PoW is a consensus rule, and CL is the consensus layer — EL does not re-check.
+**EVM-level note**: post-merge Ethereum redefined opcode `0x44` from `DIFFICULTY` to `PREVRANDAO` (EIP-4399). For QKC's EVM upgrade, what `block.difficulty` / `block.prevrandao` actually return is a patched-geth decision (preserve the pre-Paris numeric-difficulty semantics, or move to PREVRANDAO with mixhash as the source). Either choice has implications for existing QKC mainnet contracts that read this opcode; audited under the patched-geth workstream, not here.
 
-**Patched geth's responsibility, on `engine_newPayload`**:
-1. **Schema + payload→Header mapping** — extend `ExecutionPayloadV3` to carry `difficulty` and `nonce`, and read these fields when constructing the internal `types.Header` (vanilla post-merge geth hardcodes both to 0 here, so without this change geth's `Header.Hash()` would never match the CL-computed `payload.blockHash`). `MixDigest ← prevRandao` is the standard mapping, no patch needed.
-2. **Relax `verifyHeader`** — skip the post-merge `Difficulty == 0` / `Nonce == 0` checks.
-
-Standard EL behavior is unchanged: it still reconstructs the Header from the payload, recomputes `Header.Hash()`, and rejects if it doesn't match `payload.blockHash`. This is the same payload-self-consistency check vanilla post-merge geth runs against its beacon CL.
-
-> **`headerBridge` shorthand**, used throughout the rest of the document: a thin codec module on the CL side that does pure field-level conversions between the three formats CL touches — wire `MinorBlock`/`MinorBlockHeader`, `ExecutionPayload`, and geth `types.Header`. `PayloadToHeader` builds an internal Header for `SealHash` computation (CL-internal, not on the wire). `wireBlockToPayload` packs a wire MinorBlock into the standard `ExecutionPayloadV3` base (for sync-import; the QKC PoW fields are attached separately). `ToMinor` packs a geth Header back into wire `MinorBlockHeader` form for outbound responses. Under regenesis every one of these is a 1:1 field repack.
+> **`headerBridge` shorthand**, used throughout the rest of this document: a CL-side codec that converts between the three formats CL touches — wire `MinorBlock`/`MinorBlockHeader`, the patched-geth `ExecutionPayloadV?QKC`, and the internal `types.Header` CL needs for `SealHash` computation. Without regenesis the conversions are non-trivial (QKC's wire formats differ from vanilla geth's), but they're pure field re-packs — no consensus logic.
 
 ### 8.5 The three semantically different flows
 
@@ -519,9 +509,9 @@ Three CL → EL interaction patterns are worth naming up front; pseudocode for e
 
 | Flow | What's distinctive | Detail |
 |---|---|---|
-| **Mining template build** | `engine_forkchoiceUpdated(payloadAttributes)` → `engine_getPayload` returns the standard (unsealed) `ExecutionPayloadV3`; CL computes `Difficulty` out-of-band and caches it with the payload until the miner produces a seal | [§9.1](#91-create_block_async_func--block-template-build) |
-| **Block commit (mined seal)** | CL promotes the cached payload to `ExecutionPayloadV3QKC` by attaching `Difficulty`/`Nonce`/`PrevRandao=mixhash`, runs PoW verification, then `engine_newPayload` + `engine_forkchoiceUpdated` | [§9.2](#92-add_block_async_func--block-commit-after-seal) |
-| **Sync (peer block)** | Same `ExecutionPayloadV3QKC` shape as the commit path, except PoW fields come from the peer's already-sealed header instead of the local miner | [§10](#10-in-process-sync-contract) |
+| **Mining template build** | `engine_forkchoiceUpdated(payloadAttributesV3QKC)` → `engine_getPayload` returns an unsealed `ExecutionPayloadV3QKC` (full QKC block format, seal fields empty); CL computes `Difficulty` out-of-band and caches it with the payload until the miner produces a seal | [§9.1](#91-create_block_async_func--block-template-build) |
+| **Block commit (mined seal)** | CL fills `Difficulty` / `Nonce` / `MixDigest` into the cached payload, runs PoW verification, then `engine_newPayload` + `engine_forkchoiceUpdated` | [§9.2](#92-add_block_async_func--block-commit-after-seal) |
+| **Sync (peer block)** | CL converts the wire `MinorBlock` to `ExecutionPayloadV3QKC` via `headerBridge` (the PoW fields are already in the peer's header), then `engine_newPayload` + tip-update | [§10](#10-in-process-sync-contract) |
 
 The commit and sync paths converge on the same payload schema and the same Engine API sequence; the only difference is where the PoW fields originate.
 
@@ -563,16 +553,16 @@ createBlockToMine(coinbase) {
   parent = clChain.CurrentHeader()
   attrs = PayloadAttributesV3QKC{
       Timestamp:             max(now, parent.Time+1),
-      PrevRandao:            zero,                            // placeholder; overwritten by mixhash post-PoW
       SuggestedFeeRecipient: coinbase,
-      Withdrawals:           [],
-      ParentBeaconBlockRoot: zero,
-      ExtraData:             extra.Encode(rootTip),           // QKC extension
-      XshardDeposits:        cursor.advance(...),             // Phase 2
+      PrevRootBlockHash:     rootTip,                         // QKC: explicit field on the attrs
+      XshardDeposits:        cursor.advance(...),             // xshard milestone (§13)
+      // Other QKC-specific attrs that the CL needs to inject go here as first-class fields
+      // (no extraData-packing hacks — patched-geth understands QKC fields natively, §8.3).
   }
   fcState = ForkchoiceState{Head: parent.Hash, Safe: lastConfirmed, Finalized: lastConfirmed}
   fcuResp = elc.ForkchoiceUpdatedV3(fcState, &attrs)
-  payload = elc.GetPayloadV5(fcuResp.PayloadID)               // standard ExecutionPayloadV3
+  payload = elc.GetPayloadV5(fcuResp.PayloadID)               // unsealed ExecutionPayloadV3QKC
+                                                                // (full QKC block format, seal fields empty)
 
   difficulty    = consensusEngine.CalcDifficulty(parent, attrs.Timestamp)
   partialHeader = headerBridge.PayloadToHeader(payload, difficulty)   // unsealed header (Nonce=0, MixDigest=0)
@@ -583,7 +573,7 @@ createBlockToMine(coinbase) {
 }
 ```
 
-**What changes**: tx execution moves from in-process EVM to geth via `engine_getPayload`. The returned payload is the standard schema (unsealed); CL keeps the QKC PoW fields (`Difficulty`, `Nonce`, mixhash) out-of-band in `partialHeader`/cache until the miner produces a seal. `extraData` carries `PrevRootBlockHash`.
+**What changes**: tx execution moves from in-process EVM to geth via `engine_getPayload`. The returned payload is the unsealed QKC schema; CL keeps the QKC PoW fields (`Difficulty`, `Nonce`, mixhash) out-of-band in `partialHeader`/cache until the miner produces a seal. QKC-specific attrs like `PrevRootBlockHash` and `XshardDeposits` are first-class fields on `PayloadAttributesV3QKC`.
 
 ### 9.2 `add_block_async_func` — block commit after seal
 
@@ -606,26 +596,22 @@ insertMinedBlock(sealedBlock) {
   payload, partialHeader, difficulty, ok := cache[sealedBlock.SealHash()]
   if !ok { return ErrStaleWork }
 
-  // Promote standard ExecutionPayloadV3 → ExecutionPayloadV3QKC by attaching the PoW fields.
-  // mixhash goes into the prevRandao slot (see §8.4); difficulty + nonce go into new fields.
-  qkcPayload := ExecutionPayloadV3QKC{
-      Base:        payload,
-      Difficulty:  difficulty,
-      Nonce:       sealedBlock.Nonce(),
-      PrevRandao:  sealedBlock.MixDigest(),     // reused slot
-      XshardSends: payload.XshardSends,
-  }
+  // Fill PoW seal fields into the cached unsealed payload from §9.1.
+  // The payload schema already carries the full QKC block format end-to-end (§8.4);
+  // we only need to fill in the three seal fields the miner just produced.
+  qkcPayload := payload.WithSeal(difficulty, sealedBlock.Nonce(), sealedBlock.MixDigest())
   qkcPayload.BlockHash = computeBlockHash(qkcPayload)
 
   status := elc.NewPayloadV5(qkcPayload, [], zero, [])
   if status.Status != VALID { return ErrPayloadInvalid }
-  
-  clChain.InsertSynced(sealedBlock)                                  // write canonical + TD
-  if clChain.ForkChoice(sealedBlock) {
-    elc.ForkchoiceUpdatedV3({Head: qkcPayload.BlockHash, Safe: lastConfirmed, Finalized: lastConfirmed}, nil)
-  }
 
+  // Tip advance — own mined block is always on top of current head
+  elc.ForkchoiceUpdatedV3({Head: qkcPayload.BlockHash, Safe: lastConfirmed, Finalized: lastConfirmed}, nil)
+
+  // CL-local bookkeeping (tx_count_, xshard receive indices, etc.)
+  clChain.OnBlockAccepted(sealedBlock)
   indexer.IndexBlock(qkcPayload.BlockHash)
+
   masterConn.SendMinorBlockHeaderToMaster(req)                        // Boundary 2
   for _, peerConn := range shard.peers {
     peerConn.BroadcastNewTip(...)                                     // Boundary 3
@@ -644,34 +630,38 @@ The interface uses a `Shard` callback `add_block`. Ported verbatim to the new CL
 
 ```
 shard.AddBlock(block) {
-  // 1. CL-side validation (PoW + PoSW + parent linkage)
+  // 1. CL-side consensus validation — the subset of pyquarkchain's
+  //    `validate_block` ([shard_state.py:633]) that geth can't do:
+  //      - PoW + PoSW seal (consensus rule)
+  //      - difficulty matches parent (CL's consensus engine)
+  //      - parent mblock exists in DB; height = parent.height+1; branch matches
+  //        this shard; timestamp > parent.timestamp and not in future
+  //      - hash_prev_root_block is on root chain (geth doesn't know root chain)
+  //    Structural checks geth handles internally (gas limits, merkle root, hash_meta,
+  //    state/receipt root, extra_data size) run inside `engine_newPayload` below.
   if !validator.ValidateBlock(block) { return err }
 
-  // 2. Pack into ExecutionPayloadV3QKC (PoW fields from the peer's sealed header)
-  qkcPayload := ExecutionPayloadV3QKC{
-      Base:        wireBlockToPayload(block),
-      Difficulty:  block.Header.Difficulty,
-      Nonce:       block.Header.Nonce,
-      PrevRandao:  block.Header.MixDigest,         // reused slot
-      XshardSends: block.XshardSends,
-  }
-  qkcPayload.BlockHash = block.Hash()              // already committed by source
+  // 2. Convert wire MinorBlock → ExecutionPayloadV3QKC via headerBridge (§8.4).
+  //    The patched-geth payload schema carries the full QKC block format
+  //    end-to-end (header w/ PoW seal + PrevRootBlockHash + multi-token coinbase,
+  //    QKC-format transactions, meta, xshard sends).
+  qkcPayload := headerBridge.PayloadFromBlock(block)
 
   // 3. EL: tx execution + state/receipts validation + persist
   status := elc.NewPayloadV5(qkcPayload, [], zero, [])
   if status.Status != VALID { return ErrPayloadInvalid }
 
-  // 4. Persist CL canonical + TD
-  clChain.InsertSynced(block)
-
-  // 5. Fork choice
-  if clChain.ForkChoice(block) {
+  // 4. Tip-update decision — mirrors pyquarkchain `add_block` tip-update logic
+  //    [shard_state.py:1002]: same root-tip ancestry, then highest height (or
+  //    same height but newer root-anchor) wins
+  if shouldUpdateTip(block) {
     elc.ForkchoiceUpdatedV3({head=block.Hash, ...}, nil)
     masterConn.SendMinorBlockHeaderToMaster(req)
     for _, peerConn := range shard.peers { peerConn.BroadcastNewTip(...) }
   }
 
-  // 6. Index
+  // 5. CL-local bookkeeping (tx_count_, xshard receive indices, per-recipient index)
+  clChain.OnBlockAccepted(block)
   indexer.IndexBlock(block.Hash())
 }
 ```
@@ -680,24 +670,11 @@ Same flow as `insertMinedBlock` minus the work-cache lookup. The Synchronizer + 
 
 ---
 
-## 11. Regenesis: Master-Side Changes
+## 11. Master-Side Changes
 
-The pyquarkchain master is in production and must be updated to accept the new wire format. The changes are localized.
+With regenesis out of scope (§1.3), **the pyquarkchain master needs no changes**. The new CL speaks the existing pyquarkchain cluster protocol byte-for-byte, accepts and emits the existing wire-level `MinorBlockHeader` / `MinorBlock` / `CrossShardTransactionDeposit` structures, and preserves all current RPC schemas. Master sees a drop-in replacement on the slave side.
 
-| Area | Files (approximate) | Estimated LOC |
-|---|---|---|
-| Replace `MinorBlockHeader` custom struct with standard `types.Header`-equivalent (Python equivalent — actually a new wire-compatible serializer) | `quarkchain/core.py`, `quarkchain/cluster/rpc.py` | ~400 |
-| Remove `MinorBlockMeta` (now embedded in header / extraData) | Same | ~200 |
-| `AddMinorBlockHeaderRequest` payload changes (drop `coinbase_amount_map`, simplify `shard_stats`) | `quarkchain/cluster/rpc.py` | ~80 |
-| Master-side code that reads `hash_meta`, `coinbase_amount_map`, etc. | `quarkchain/cluster/master.py`, `quarkchain/cluster/root_state.py` | ~400 |
-| Root block validation: confirmed-mheader logic adapts to new header type | `root_state.py` | ~200 |
-| `serialize/*` changes for wire compatibility | `quarkchain/core/serialize.py` (?) | ~100 |
-| Address format at JSON-RPC: 24-byte → 20-byte (master is the JSON-RPC frontend) | `quarkchain/cluster/jsonrpc.py` | ~200 |
-| Genesis tooling: snapshot generator, new genesis builder, migration scripts | New module | ~400 |
-| Tests + docs | Throughout | ~400 |
-| **Total** | | **~2400** |
-
-The new CL also provides an *adapter mode* (configurable) where it can speak the old wire format during a transition period — but this doubles the CL test surface and is only a backup plan.
+This is the practical payoff of *not* doing regenesis: the master codebase is untouched, the on-chain history continues, and the new slave can be validated by replaying mainnet against it without a coordinated cutover.
 
 ---
 
@@ -705,8 +682,8 @@ The new CL also provides an *adapter mode* (configurable) where it can speak the
 
 | Old slave responsibility | Where today | Where in new CL/EL |
 |---|---|---|
-| Minor block header / meta wire types | `quarkchain/core.py` `MinorBlockHeader`/`MinorBlockMeta` | Standard `types.Header` (with `extraData` carrying `PrevRootBlockHash`) |
-| Minor chain state (headers, bodies, canonical, TD) | `MinorBlockChain` + LevelDB | Headers/bodies/receipts/state in geth's DB; canonical + TD + root anchors in CL's small LevelDB |
+| Minor block header / meta wire types | `quarkchain/core.py` `MinorBlockHeader`/`MinorBlockMeta` | Patched geth's `types.Header` extended with QKC fields (`PrevRootBlockHash`, multi-token `CoinbaseAmount`, `hash_meta`, etc.) — no field packing into `extraData` |
+| Minor chain state (headers, bodies, canonical, TD) | `MinorBlockChain` + LevelDB | Headers/bodies/receipts/state/canonical all in geth's DB; CL's small LevelDB holds only QKC-specific metadata geth doesn't have — root anchors, xshard inbox, per-recipient indexer (§2.5) |
 | EVM execution + state | `quarkchain/evm/*`, `MinorBlockChain.apply_transaction` | Geth |
 | Tx pool | `MinorBlockChain.tx_queue` | Geth's `core/txpool` |
 | Block production (template) | `MinorBlockChain.create_block_to_mine` | `engine_forkchoiceUpdated` + `engine_getPayload` (§9.1) |
@@ -721,11 +698,87 @@ The new CL also provides an *adapter mode* (configurable) where it can speak the
 | `cluster_peer_id` multiplexing | `protocol.py` `VirtualConnection` mechanism | Go equivalent (Boundary 3) |
 | Per-recipient tx index | `MinorBlockChain.get_transactions_by_address` (custom in-DB) | CL `Indexer` driven by `eth_getBlockReceipts` ([Appendix C](#appendix-c-per-recipient-tx-index)) |
 | `ROOT_CHAIN_POSW` lookup | In-EVM call against shard state | `eth_call` to ROOT_CHAIN_POSW contract; geth in archive mode |
-| Block reward issuance | `MinorBlockChain.finalize` (multi-token aware) | Patched geth's `Finalize` (single token under regenesis) |
-| Genesis | `quarkchain/cluster/genesis.py` | `geth-genesis.json` + `geth init`, generated by regenesis tooling |
+| Block reward issuance | `MinorBlockChain.finalize` (multi-token aware) | Patched geth's `Finalize` (preserves multi-token semantics) |
+| Genesis | `quarkchain/cluster/genesis.py` | Existing QKC genesis state preserved on-chain; CL + patched-geth start from the same chain state (no regenesis — §1.3) |
 | Crash recovery | `MinorBlockChain.load_last_state` | CL `Reconcile()` walks CL tip vs EL head |
 
 Every row has a home.
+
+---
+
+## 13. Milestones
+
+The build is staged so each milestone is testable end-to-end before moving on. Earlier milestones use a minimally-patched geth and the simplest possible CL; later milestones grow the geth patch (block format, multi-token, xshard hooks) and layer in the cluster boundaries, xshard, and finally a full mainnet replay.
+
+### M1 — Local block production with PoW-enabling geth patches
+
+**Goal**: the new CL can drive a geth subprocess and produce blocks via PoW, all on a single host. No master, no p2p, no sync, no xshard.
+
+**Scope**:
+- Minimal CL bootstrap: read config, launch `geth --datadir=...` as a subprocess, bring up an Engine API client.
+- Miner integration: in-process Miner ([§9](#9-in-process-miner-contract)) driving `engine_forkchoiceUpdated` (with payload attributes) → `engine_getPayload` → PoW search → `engine_newPayload`.
+- Geth: **only the minimal PoW-enabling patches** — block format otherwise stays vanilla post-merge (no QKC fields, no multi-token; those land in M2). This is the §8.4 PoW-seal subset of the eventual full patch, just enough to make the mine→seal→commit loop succeed:
+  - **Engine API carries the seal**: extend the payload to carry `difficulty` / `nonce` / `mixhash` across the CL↔EL boundary.
+  - **Header reconstruction reads them**: take `Difficulty` / `Nonce` / `MixDigest` from the payload instead of hardcoding 0 / `prevRandao`, so geth's internal header matches what CL sealed. (`Header.Hash()` already RLP-encodes these fields, so the committed block hash reflects the seal once the values are right — no separate change needed.)
+  - **Relax `verifyHeader`**: drop the post-merge `Difficulty == 0` / `Nonce == 0` rejections, and don't re-verify PoW. Geth trusts the seal the CL handed it, the same way vanilla post-merge geth trusts its beacon CL.
+
+  SealHash computation, difficulty calculation, and PoW *verification* all stay on the CL side (§8.4 / §9.1) — geth's only PoW-related job is to stop rejecting PoW headers.
+- CL DB minimal: just enough to track the chain locally; no per-recipient index, no xshard inbox.
+
+**Exit criteria**: CL produces a chain of N blocks locally, the miner cycle (getPayload → PoW → newPayload → forkchoice) runs without errors, geth's `eth_blockNumber` advances, and a restart recovers the tip.
+
+### M2 — Connect to master, geth block-format patches land
+
+**Goal**: master + new slave can produce blocks together on a local cluster — same shape as today's pyquarkchain dev cluster, just with one shard now driven by the new Go CL.
+
+**Scope**:
+- Cluster protocol: implement Boundary 1 (master inbound RPC, §4 — bringup ops, `ADD_ROOT_BLOCK_REQUEST`, `ADD_TRANSACTION_REQUEST`, read ops, mining ops) and Boundary 2 (`ADD_MINOR_BLOCK_HEADER_REQUEST`, §5).
+- Patched geth absorbs the **full QKC block format** (building on M1's seal-only patches):
+  - **Header**: the complete `MinorBlockHeader` field set (`PrevRootBlockHash`, `CoinbaseAmount` multi-token map, `hash_meta`, etc.).
+  - **Body**: `MinorBlock` body layout.
+  - **Transaction format**: QKC `TypedTransaction` fields — `from_full_shard_key` / `to_full_shard_key`, `gas_token_id`, `transfer_token_id`, and the existing signature/serialization conventions.
+  - **Multi-native-token**: balances, transfers, and gas accounting become multi-token (not single native token).
+
+  This same field set also defines the CL↔EL Engine API extension schema (`PayloadAttributesV?QKC` / `ExecutionPayloadV?QKC`) — the contract the CL workstream and the patched-geth workstream must agree on, replacing M1's seal-only dev path.
+- No p2p, no sync, no xshard yet.
+
+**Exit criteria**: a master + one new slave can boot from existing mainnet genesis state, ingest a `CONNECT_TO_SLAVES_REQUEST` + `ADD_ROOT_BLOCK_REQUEST`, mine minor blocks, and report headers back to master. Round-trip on existing wire formats.
+
+### M3 — Peer-shard P2P and sync
+
+**Goal**: the new slave participates in the live network — accepting peer-broadcasted blocks/txs and catching up via sync.
+
+**Scope**:
+- Boundary 3: `VirtualConnection` multiplexing over the master TCP, `PeerShardConn` lifecycle, the peer-shard protocol commands listed in §6.2 (`NEW_MINOR_BLOCK_HEADER_LIST`, `NEW_BLOCK_MINOR`, `NEW_TRANSACTION_LIST`, plus block/header list responses).
+- Sync ([§10](#10-in-process-sync-contract)): `SyncTask` ported, `add_block` runs the full apply pipeline (validate → `engine_newPayload` → forkchoice → header report).
+- `SYNC_MINOR_BLOCK_LIST_REQUEST` ([Appendix B.3](#b3-sync_minor_block_list_request)) wired end-to-end.
+
+**Exit criteria**: new slave joins a running testnet, downloads the chain from a peer, and stays at the tip with vanilla pyquarkchain slaves continuing to mine.
+
+### M4 — Xshard, RPC surface, indexer
+
+**Goal**: feature parity for the user-facing surface — cross-shard txs, the full JSON-RPC read API, per-recipient tx history.
+
+**Scope**:
+- Boundary 4 ([§7](#7-boundary-4-slave-to-slave-xshard-direct-tcp)): slave-to-slave xshard TCP pool, `ADD_XSHARD_TX_LIST_REQUEST`, mirror pyquarkchain's `CrossShardTransactionDeposit` format and apply semantics (cursor-driven, multi-token).
+- Patched-geth xshard hooks: pre/post-block, multi-token aware.
+- Read ops: the §4.3 table (`GET_TRANSACTION_LIST_BY_ADDRESS`, `GET_TOTAL_BALANCE`, `GET_LOG`, etc.) routed to `eth_*` JSON-RPC + the per-recipient index ([Appendix C](#appendix-c-per-recipient-tx-index)).
+- Remote-miner JSON-RPC bridge (`GET_WORK` / `SUBMIT_WORK`, Appendix B.5/B.6).
+
+**Exit criteria**: an external client (wallet, block explorer) talking to master+new-slave gets identical results to a master+pyquarkchain-slave for all public RPC methods, and xshard txs round-trip through the new slave.
+
+### M5 — Full mainnet replay validation
+
+**Goal**: the strongest correctness test the no-regenesis decision (§1.3) buys us — replay the entire mainnet history block-by-block through the new slave and assert that every resulting state hash matches the canonical chain.
+
+**Scope**:
+- A replay harness: feeds historical root blocks + minor blocks into the new slave in canonical order; after each `engine_newPayload`, asserts that the CL's computed `stateRoot` / `receiptsRoot` / `MinorBlockHeader.hash()` matches the historical value.
+- Divergence triage tooling: when a block fails, capture pre-state, tx list, post-state diff so the patched-geth or CL bug is bisectable.
+- Performance pass: long sync needs reasonable throughput; sequential `engine_newPayload` may bottleneck (open item — tracked separately in the perf workstream).
+
+**Anticipated problem — EVM version divergence**: pyquarkchain's EVM is an old fork of pyethereum (Constantinople/Petersburg era), while the new EL is latest-geth. Between them, opcode gas costs were repriced (EIP-2929 access lists, EIP-3529 refund changes, EIP-1884, EIP-2200, …), opcodes were added (`PUSH0`, …), and behaviors changed. If a historical block is re-executed under the *new* EVM rules, gas accounting diverges → `gasUsed`, refunds, and coinbase amounts differ → state root won't match → replay fails. This is the single most likely cause of replay divergence.
+
+**Exit criteria**: new slave replays all of mainnet end-to-end with zero state-root divergence. After this, the new slave is the canonical implementation; pyquarkchain slaves are retired.
 
 ---
 
@@ -853,69 +906,68 @@ slave.handle_add_root_block_request(req)                  [slave.py:211]
   └─ for each shard in self.shards.values():
         switched = await shard.add_root_block(req.root_block)
              │
-             └─ Shard.add_root_block(root_block):           [shard.py:624]
-                  └─ ShardState.add_root_block(root_block): [shard_state.py:1405]
-                       ├─ verify root block, accept into rawdb
-                       ├─ find last-confirmed-minor for this shard under rBlock
-                       ├─ if current shard tip's hash_prev_root is on a
-                       │  different root chain than rBlock:
-                       │       rewind shard canonical to last-still-valid mblock
-                       │       return switched=true
-                       └─ return (switched, nil)
+             └─ ShardState.add_root_block(root_block):     [shard_state.py:1405]
+                  ├─ validate; persist `rblock_` + `r_last_m`
+                  ├─ shard_header = last mheader in rBlock on this shard
+                  │
+                  ├─ TD gate: if rBlock.TD <= root_tip.TD → return False (sibling)
+                  │
+                  ├─ switch root tip; confirmed_header_tip = shard_header
+                  │
+                  └─ if shard_header NOT on current canonical:
+                       header_tip = shard_header
+                       rebuild EVM state at the new tip
+                       return True
         if switched:
             shard.broadcast_new_tip()                       [via PeerShardConn]
   └─ return AddRootBlockResponse(error_code=0)
 ```
 
-The complex part is `ShardState.add_root_block`'s cascade-rewind logic — when a committed mheader on the new root chain conflicts with the slave's current shard tip, the slave must walk its shard chain back to the last-still-valid mblock and replay forward.
+**Important property**: pyquarkchain sets `header_tip = shard_header` exactly — it does **not** walk forward to find a longer chain on the same fork (TODO at [shard_state.py:1511](../quarkchain/cluster/shard_state.py#L1511)). Recovery to a higher tip happens later via `add_block`'s standard tip-update logic when new mblocks arrive.
 
 #### New Go CL handler
 
 ```
-CL.handleAddRootBlock(req)
-  │
-  ├─ for each ShardCL in slave.shardCLs:
-  │     switched := shardCL.AddRootBlock(req.RootBlock)
-  │     if switched: shardCL.BroadcastNewTip()    // PeerShardConn fan-out
-  │
-  └─ return AddRootBlockResponse{ErrorCode: 0}
+CL.handleAddRootBlock(req):
+  for each ShardCL in slave.shardCLs:
+      switched := shardCL.AddRootBlock(req.RootBlock)
+      if switched: shardCL.BroadcastNewTip()    // PeerShardConn fan-out
+  return AddRootBlockResponse{ErrorCode: 0}
 
 
 ShardCL.AddRootBlock(rBlock):
-  ├─ 1. verifyRootHeader(rBlock)                            // PoW + parent chain
-  │
-  ├─ 2. db.Put("rb"+rBlock.Hash(), rBlock)                  // cache root block
-  │
-  ├─ 3. lastConfirmedMheader := findLastConfirmedFor(rBlock, shardCL.branch)
-  │     db.Put("rb:lastm"+rBlock.Hash(), lastConfirmedMheader.Hash())
-  │
-  ├─ 4. rootChain.rootTip = rBlock.Hash()
-  │     rootChain.lastConfirmedMinor = lastConfirmedMheader.Hash()
-  │
-  ├─ 5. if lastConfirmedMheader NOT on shardCL's canonical chain:
-  │        // committed mheader diverges — cascade rewind
-  │        elc.ForkchoiceUpdatedV3(
-  │            ForkchoiceState{
-  │                HeadBlockHash:      lastConfirmedMheader,
-  │                SafeBlockHash:      lastConfirmedMheader,
-  │                FinalizedBlockHash: lastConfirmedMheader,
-  │            },
-  │            nil,
-  │        )
-  │        // geth handles the state rewind internally via its existing
-  │        // canonical-chain machinery (post-merge fork-choice mechanism)
-  │        switched = true
-  │
-  ├─ 6. [Phase 2] for each newly confirmed mheader,
-  │        mark xs:src + mheaderHash entries as eligible-for-application
-  │
-  └─ return switched
+  1. validate; shard_header := last mheader in rBlock on this shard
+  2. db.Put("rblock_"+rBlock.Hash(), rBlock)
+     db.Put("r_last_m"+rBlock.Hash(), shard_header.Hash())
+
+  3. // TD gate
+     if rBlock.TotalDifficulty <= rootChain.rootTip.TotalDifficulty:
+         return false
+
+     rootChain.rootTip            = rBlock.Hash()
+     rootChain.lastConfirmedMinor = shard_header.Hash()
+
+  4. // If shard_header is not on geth's current canonical at its height, drive
+     //   geth to it. The post-merge fork-choice machinery does the state rewind.
+     if elc.GetBlockByNumber(shard_header.Number).Hash() != shard_header.Hash():
+         elc.ForkchoiceUpdatedV3(
+             ForkchoiceState{
+                 HeadBlockHash:      shard_header.Hash(),
+                 SafeBlockHash:      shard_header.Hash(),
+                 FinalizedBlockHash: shard_header.Hash(),
+             },
+             nil,
+         )
+         return true
+
+  5. // [xshard milestone, §13] mark `xShard_` + newly-confirmed mheader entries
+  //   as eligible-for-application
 ```
 
 **Key differences from the Python slave**:
-- Shard chain rewind is no longer custom QKC code; `engine_forkchoiceUpdated` does it via geth's native canonical-chain machinery (the same mechanism Ethereum CL uses post-merge).
-- `lastConfirmedMheader` is persisted as `"rb:lastm" + root_hash` so reorgs across root tips don't require re-scanning the mheader list.
-- Phase 2 xshard "eligibility" gating happens at this point (the cursor over the canonical root chain advances).
+- State rewind is delegated to geth via `engine_forkchoiceUpdated` — no custom EVM state manipulation. Geth's post-merge fork-choice machinery replaces pyquarkchain's `__update_tip(b, evm_state)`.
+- The "longest chain on the new fork" gap is preserved: like pyquarkchain, this implementation does NOT walk forward from `shard_header`. Recovery to the live tip goes through the normal sync path (§10).
+- Xshard eligibility gating happens at step 5, implemented in the xshard milestone (§13).
 
 ---
 
@@ -1125,42 +1177,46 @@ CL.handleSyncMinorBlockList(req)
   │
   │     // Step B: validate and apply each block via Engine API
   │     for _, block := range blocks {
-  │         // (B.1) Header-level checks done in CL
+  │         // (B.1) CL-side consensus validation — the subset of pyquarkchain's
+  │         //   `validate_block` ([shard_state.py:633]) that geth can't do:
+  │         //     - PoW + PoSW seal (consensus rule)
+  │         //     - difficulty matches parent (CL's consensus engine)
+  │         //     - parent mblock exists in DB; height = parent.height+1; branch
+  │         //       matches this shard; timestamp > parent.timestamp and not in future
+  │         //     - hash_prev_root_block is on root chain (geth doesn't know root chain)
+  │         //   Gas limits, merkle root, hash_meta, state/receipt root run inside
+  │         //   `engine_newPayload` below.
   │         if err := shardCL.validator.ValidateBlock(block); err != nil {
   │             return errResp
   │         }
   │
-  │         // (B.2) Pack into ExecutionPayloadV3QKC (PoW fields from peer's sealed header)
-  │         qkcPayload := ExecutionPayloadV3QKC{
-  │             Base:        wireBlockToPayload(block),
-  │             Difficulty:  block.Header.Difficulty,
-  │             Nonce:       block.Header.Nonce,
-  │             PrevRandao:  block.Header.MixDigest,
-  │             XshardSends: block.XshardSends,
-  │         }
-  │         qkcPayload.BlockHash = block.Hash()
+  │         // (B.2) Convert wire MinorBlock → ExecutionPayloadV3QKC via
+  │         //   headerBridge (§8.4). The patched-geth payload schema carries
+  │         //   the full QKC block format end-to-end (header w/ PoW seal +
+  │         //   PrevRootBlockHash + multi-token coinbase, QKC-format txs, meta).
+  │         qkcPayload := headerBridge.PayloadFromBlock(block)
   │
   │         // (B.3) Hand to geth for tx-level validation + state apply
   │         status, _ := shardCL.elc.NewPayloadV5(ctx, qkcPayload, ...)
   │         if status.Status != VALID { return errResp }
   │
-  │         // (B.4) Persist CL canonical pointer + TD
-  │         shardCL.chain.InsertSynced(block)
-  │
-  │         // (B.5) Advance EL canonical if this block is on the canonical chain
-  │         if shardCL.chain.ForkChoice(block) {
+  │         // (B.4) Tip-update decision — mirrors pyquarkchain `add_block`
+  │         //   tip-update logic ([shard_state.py:1002]): same root-tip ancestry,
+  │         //   then highest height (or same height but newer root-anchor) wins.
+  │         if shouldUpdateTip(block) {
   │             shardCL.elc.ForkchoiceUpdatedV3(ctx,
   │                 ForkchoiceState{HeadBlockHash: block.Hash(), ...}, nil)
   │         }
   │
-  │         // (B.6) Update per-recipient index
+  │         // (B.5) CL-local bookkeeping + per-recipient index
+  │         shardCL.chain.OnBlockAccepted(block)
   │         shardCL.indexer.IndexBlock(block.Hash())
   │
-  │         // (B.7) [Phase 2] forward xshard sends emitted by this block
+  │         // (B.6) [xshard milestone, §13] forward xshard sends emitted by this block
   │         //       to destination slaves via SlaveConn
   │         slave.BatchBroadcastXshardSends(block.xshardSends)
   │
-  │         // (B.8) report header to master
+  │         // (B.7) report header to master
   │         masterConn.SendMinorBlockHeaderListToMaster(block.Header())
   │     }
   │
@@ -1175,7 +1231,7 @@ CL.handleSyncMinorBlockList(req)
 ```
 
 **Key differences**:
-- `ShardState.add_block` → `engine_newPayload` + (conditionally) `engine_forkchoiceUpdated`. EL executes the txs and persists state; CL only manages the canonical pointer.
+- `ShardState.add_block` → `engine_newPayload` + (conditionally) `engine_forkchoiceUpdated`. EL runs tx execution and persists everything (state, headers, bodies, receipts, and the canonical chain itself); CL only decides the tip-update (mirroring pyquarkchain's `add_block` logic) and tells geth via the Engine API.
 - Header validation (PoW + PoSW) stays in CL; tx-level validation (state root, receipts root, gas accounting) moves to EL.
 - Per-recipient indexing ([Appendix C](#appendix-c-per-recipient-tx-index)) runs as a post-step here so synced blocks are immediately query-able.
 - The PeerShardConn fetch path is identical in shape to today; only the multiplexing implementation is new Go code.
@@ -1296,7 +1352,7 @@ ShardCL.GetUnconfirmedHeaderList() []*MinorBlockHeader:
   ├─ hdr, _ := elc.GetBlockHeaderByHash(ctx, headHash)         // eth_getBlockByHash
   ├─ for i := 0; i < steps; i++ {
   │      if hdr.Number <= maxHeight {
-  │          headers = append(headers, headerBridge.ToMinor(hdr))
+  │          headers = append(headers, hdr)                    // serialized in QKC wire format on response
   │      }
   │      hdr, _ = elc.GetBlockHeaderByHash(ctx, hdr.ParentHash)
   │ }
@@ -1308,8 +1364,6 @@ ShardCL.GetUnconfirmedHeaderList() []*MinorBlockHeader:
 
 **Key differences from the Python slave** (deliberately kept minimal):
 - Only the header source changes: `db.get_minor_block_header_by_hash` → `elc.GetBlockHeaderByHash` (`eth_getBlockByHash` over the EL's read-only RPC). Walk direction, termination condition, `maxBlocks` cap, and ascending-order reversal are all preserved.
-- Under regenesis the geth `core/types.Header` IS the minor-block header — `headerBridge.ToMinor` is a zero-copy field re-pack for the wire codec.
-- `confirmed_header_tip` no longer lives as a runtime ShardState field; it's persisted as `lastConfirmedMinor` in CLChain state (updated every `AddRootBlock`; see B.1 step 4). Same data, same role.
 - This op is a **pure read fan-out**: no Engine API calls, no state mutation, no DB writes — only the EL's read-only header surface.
 
 ---
@@ -1526,15 +1580,9 @@ Miner.SubmitWork(headerHash, nonce, mixhash) (bool, error):
   │     return false, nil
   │ }
   │
-  ├─ // Promote standard ExecutionPayloadV3 → ExecutionPayloadV3QKC by attaching
-  ├─ // PoW fields (mixhash → prevRandao slot; see §8.4)
-  ├─ qkcPayload := ExecutionPayloadV3QKC{
-  │     Base:        entry.payload,
-  │     Difficulty:  entry.difficulty,
-  │     Nonce:       nonce,
-  │     PrevRandao:  mixhash,                            // reused slot
-  │     XshardSends: entry.payload.XshardSends,
-  │ }
+  ├─ // Fill PoW seal fields into the cached unsealed payload from B.5 / §9.1.
+  ├─ // The payload schema already carries the full QKC block format end-to-end (§8.4).
+  ├─ qkcPayload := entry.payload.WithSeal(entry.difficulty, nonce, mixhash)
   ├─ qkcPayload.BlockHash = computeBlockHash(qkcPayload)
   │
   ├─ // CL-side PoW verification — must run before handing to EL
@@ -1549,18 +1597,18 @@ Miner.SubmitWork(headerHash, nonce, mixhash) (bool, error):
   │     return false, ErrPayloadInvalid
   │ }
   │
-  ├─ shardCL.chain.InsertSynced(qkcPayload)                // CL canonical + TD
-  ├─ if shardCL.chain.ForkChoice(qkcPayload) {
-  │     shardCL.elc.ForkchoiceUpdatedV3(
-  │         ForkchoiceState{HeadBlockHash: qkcPayload.BlockHash, ...}, nil)
-  │ }
+  ├─ // Own freshly-mined block extends current head; advance forkchoice unconditionally
+  ├─ shardCL.elc.ForkchoiceUpdatedV3(
+  │     ForkchoiceState{HeadBlockHash: qkcPayload.BlockHash, ...}, nil)
   │
+  ├─ // CL-local bookkeeping (tx_count_, xshard receive indices, per-recipient index)
+  ├─ shardCL.chain.OnBlockAccepted(qkcPayload)
   ├─ shardCL.indexer.IndexBlock(qkcPayload.BlockHash)      // per-recipient index (Appendix C)
   ├─ masterConn.SendMinorBlockHeaderToMaster(req)          // Boundary 2
   ├─ for _, peerConn := range shardCL.peers {
   │     peerConn.BroadcastNewTip(...)                      // Boundary 3 — peer-shard fan-out
   │ }
-  ├─ slave.BatchBroadcastXshardSends(qkcPayload.XshardSends)  // [Phase 2] xshard fan-out
+  ├─ slave.BatchBroadcastXshardSends(qkcPayload.XshardSends)  // xshard fan-out (xshard milestone, §13)
   │
   ├─ delete(miner.workMap, headerHash)
   └─ return true, nil
@@ -1568,7 +1616,7 @@ Miner.SubmitWork(headerHash, nonce, mixhash) (bool, error):
 
 **Key differences from the Python slave**:
 - Cache lookup-by-`header_hash` and tip-move recheck are preserved verbatim — same race semantics (a seal that wins the PoW after a new tip lands gets rejected).
-- `MinorBlockChain.add_block` → `engine_newPayload` + (conditionally) `engine_forkchoiceUpdated` against geth (§9.2). Header validation (PoW/PoSW) stays in CL; tx-level validation (state root, receipts root) is done by EL inside `newPayload`.
+- `MinorBlockChain.add_block` → `engine_newPayload` + `engine_forkchoiceUpdated` against geth (§9.2). Header validation (PoW/PoSW) stays in CL; tx-level validation (state root, receipts root) is done by EL inside `newPayload`.
 - The post-accept fan-out (master notify, peer-shard broadcast, xshard broadcast, indexer write) is **the same set of side-effects as B.3** (sync-driven import). The two paths share §9.2 — only the trigger differs (remote-miner submit vs. peer sync).
 - Cached `payload` (not a deserialized `Block`) is what gets handed to `engine_newPayload`, avoiding a round-trip through QKC `MinorBlock` serialization on the hot mining path.
 
@@ -1576,11 +1624,11 @@ Miner.SubmitWork(headerHash, nonce, mixhash) (bool, error):
 
 ## Appendix C: Per-recipient tx index
 
-QuarkChain's `GET_TRANSACTION_LIST_BY_ADDRESS_REQUEST` and `GET_ALL_TRANSACTIONS_REQUEST` need per-address tx history, which geth doesn't provide natively. The new CL maintains a local index — mirroring pyquarkchain's encoding ([shard_db_operator.py:21](../quarkchain/cluster/shard_db_operator.py#L21)) where **the key alone encodes the location** and the value is empty:
+QuarkChain's `GET_TRANSACTION_LIST_BY_ADDRESS_REQUEST` and `GET_ALL_TRANSACTIONS_REQUEST` need per-address tx history, which geth doesn't provide natively. The new CL maintains a local index using pyquarkchain's exact encoding ([shard_db_operator.py:21](../quarkchain/cluster/shard_db_operator.py#L21)) — **the key alone encodes the location** and the value is empty:
 
 ```
-"ix:addr" + recipient(20B) + height(4B) + xshard_flag(1B) + idx(4B)  →  b""
-"ix:all"                   + height(4B) + xshard_flag(1B) + idx(4B)  →  b""
+b"index_addr_" + recipient(20B) + height(4B) + xshard_flag(1B) + idx(4B)  →  b""
+b"index_alltx_"                 + height(4B) + xshard_flag(1B) + idx(4B)  →  b""
 
   recipient:    20-byte address
   height:       big-endian uint32, block height of the tx
@@ -1593,22 +1641,22 @@ QuarkChain's `GET_TRANSACTION_LIST_BY_ADDRESS_REQUEST` and `GET_ALL_TRANSACTIONS
 **Write path** (post-`engine_newPayload` VALID), for the new block:
 
 *For each normal tx in `block.transactions[]`:*
-- Add `"ix:all"` entry (global tx feed).
-- Add `"ix:addr" + sender` entry.
-- If the tx has a non-empty recipient on this shard, add `"ix:addr" + recipient` entry.
+- Add `index_alltx_` entry (global tx feed).
+- Add `index_addr_` + sender entry.
+- If the tx has a non-empty recipient on this shard, add `index_addr_` + recipient entry.
 
 *For each incoming xshard deposit applied this block:*
-- Add `"ix:addr" + deposit.to` entry (with `xshard_flag=0`).
-- Add `"ix:all"` entry (with `xshard_flag=0`), **except** for coinbase-reward deposits (`is_from_root_chain=True`) — those are skipped from the global feed to avoid drowning it in mining rewards (matches [pyquarkchain shard_db_operator.py:99-102](../quarkchain/cluster/shard_db_operator.py#L99)).
+- Add `index_addr_` + `deposit.to` entry (with `xshard_flag=0`).
+- Add `index_alltx_` entry (with `xshard_flag=0`), **except** for coinbase-reward deposits (`is_from_root_chain=True`) — those are skipped from the global feed to avoid drowning it in mining rewards (matches [pyquarkchain shard_db_operator.py:99-102](../quarkchain/cluster/shard_db_operator.py#L99)).
 
 (So a normal tx writes 2–3 keys; a regular xshard deposit writes 2 keys; a root-chain-coinbase xshard deposit writes 1 key.)
 
-**Why `ix:all` exists** (and isn't just a walk over geth blocks): xshard incoming deposits are **not** in `block.transactions[]` — under the new design they're applied via the pre-block hook (EIP-4895 fast path for pure transfers; system-level CALL for contract invocations), and under current pyquarkchain they're applied via the cursor before normal txs. Either way they don't surface in geth's standard block-tx list. The `ix:all` index unifies "normal tx" and "xshard receive" into a single chronologically-ordered feed for `qkc_getAllTransactions`.
+**Why `index_alltx_` exists** (and isn't just a walk over geth blocks): xshard incoming deposits are **not** in `block.transactions[]` — under current pyquarkchain they're applied via the cursor before normal txs, and the new design preserves that. Either way they don't surface in geth's standard block-tx list. The `index_alltx_` index unifies "normal tx" and "xshard receive" into a single chronologically-ordered feed for `qkc_getAllTransactions`.
 
 **Read path** for `GET_TRANSACTION_LIST_BY_ADDRESS_REQUEST(address, start_key, limit)`:
 
 ```
-prefix = "ix:addr" + address
+prefix = b"index_addr_" + address
 iterate keys in DB reverse-order over [prefix .. prefix+1) starting at start_key:
     parse (height, xshard_flag, idx) from key
     if xshard_flag == 1:
