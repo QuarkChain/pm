@@ -232,7 +232,7 @@ Each ShardCL has its own LevelDB instance, holding **only the QKC-specific conse
 
 **Not stored at all** (compared to earlier drafts of this doc that proposed them):
 - `td` (total difficulty) — **doesn't apply to shard chain**. Pyquarkchain's `MinorBlockHeader` ([core.py:681](../quarkchain/core.py#L681)) has per-block `difficulty` but **no `total_difficulty` field**, and `shard_state.py` never references TD on the shard side. Shard tip-update uses height + root-anchor tie-breaker, not TD (see §10 / B.3). Only `RootBlockHeader` carries `total_difficulty`, used by master's root-chain fork choice.
-- Canonical / root tip pointers — reconstructed at startup the same way pyquarkchain does it (see [shard_state.py:279 `init_from_root_block`](../quarkchain/cluster/shard_state.py#L279)): master sends the current root tip via `CONNECT_TO_SLAVES_REQUEST`; CL looks up `b"r_last_m" + root_tip_hash` to find the last confirmed mheader for this shard, and that becomes the starting `header_tip`. Any unconfirmed mblocks mined after the last root checkpoint are discarded on restart — same behavior as pyquarkchain today.
+- Canonical / root tip pointers — reconstructed at startup the same way pyquarkchain does it (see [shard_state.py:279 `init_from_root_block`](../quarkchain/cluster/shard_state.py#L279)): master sends the current root tip block as the `root_tip` field of a `PING` message (master.py:477; slave's `handle_ping` calls `create_shards(ping.root_tip)` → `shard.init_from_root_block`); CL then looks up `b"r_last_m" + root_tip_hash` to find the last confirmed mheader for this shard, and that becomes the starting `header_tip`. Any unconfirmed mblocks mined after the last root checkpoint are discarded on restart — same behavior as pyquarkchain today. 
 
 Order-of-magnitude sizing: with 10⁸ blocks and a full per-recipient tx index, the CL DB stays under ~1 GB per shard. The EL DB (geth) is whatever the equivalent Ethereum-style chain would store anyway.
 
@@ -243,7 +243,7 @@ When the reader encounters the boundary chapters below (§4–§8), each interfa
 | Data | Lives in | Accessed via |
 |---|---|---|
 | Full mblocks (headers + bodies + meta), canonical-by-number, normal-tx index, EVM state, receipts, txpool | EL (geth DB; patched to carry QKC fields) | `eth_getBlockBy*`, `eth_getTransactionByHash`, `eth_getTransactionReceipt`, `eth_getBalance`, `eth_getStorageAt`, `eth_getCode`, `eth_call`, `eth_sendRawTransaction`, ... |
-| Root blocks + last-confirmed-mheader anchor (`rblock_`, `r_last_m`, `genesis_`) | CL DB (per-shard) | `CLChain` methods. Canonical tip / root tip are not persisted — reconstructed at startup from `r_last_m` + master's `CONNECT_TO_SLAVES_REQUEST`, matching pyquarkchain |
+| Root blocks + last-confirmed-mheader anchor (`rblock_`, `r_last_m`, `genesis_`) | CL DB (per-shard) | `CLChain` methods. Canonical tip / root tip are not persisted — reconstructed at startup from `r_last_m` + master's `PING(root_tip=...)`, matching pyquarkchain |
 | Xshard inbox + xshard-deposit tx index (`xShard_`, `xr_`, `xd_`, `txindex_`) | CL DB (per-shard) | `XshardInbox` (xshard milestone, §13) |
 | Per-recipient tx index (`index_addr_`, `index_alltx_`) | CL DB (per-shard) | `Indexer` |
 | Pending xshard deposits cursor | implicit in committed blocks | derived from CL DB + geth |
@@ -277,7 +277,7 @@ CL receives ~30 `ClusterOp` requests from master. Defined in `MASTER_OP_RPC_MAP`
 
 | ClusterOp | Today's behavior | New CL behavior |
 |---|---|---|
-| `PING` | Identify the slave (id + shard list) | Same |
+| `PING` | Identify the slave (id + shard list). When master sends with `root_tip != nil` ([master.py:477](../quarkchain/cluster/master.py#L477)), it also tells the slave to bring shards up at that root tip — handler calls `create_shards(ping.root_tip)` → `shard.init_from_root_block` ([slave.py:177](../quarkchain/cluster/slave.py#L177)) | Same; CL's `handle_ping` triggers shard CL initialization at the supplied `root_tip` |
 | `CONNECT_TO_SLAVES_REQUEST` | Master tells the slave which other slaves to connect to for xshard; slave opens TCP to each | Same; CL maintains the slave-to-slave connection pool (Boundary 4) |
 | `CREATE_CLUSTER_PEER_CONNECTION_REQUEST` | Master tells the slave that a new external peer is up; slave creates one `PeerShardConn` per local shard | Same; CL creates `peer_shard_conn.go` instances (Boundary 3) |
 | `DESTROY_CLUSTER_PEER_CONNECTION_COMMAND` | Master tells the slave a peer disconnected; tear down the PeerShardConn(s) | Same |
@@ -321,6 +321,8 @@ CL receives ~30 `ClusterOp` requests from master. Defined in `MASTER_OP_RPC_MAP`
 |---|---|---|
 | `GET_WORK_REQUEST` | `Miner.get_work(addr)` returns cached `MiningWork(header_hash, height, difficulty)` (rebuild on tip change or 10s TTL) | Same `Miner.get_work` interface; the block-building callback now drives EL via `engine_forkchoiceUpdated` + `engine_getPayload` (§9.1). **Full call-flow trace: [Appendix B.5](#b5-get_work_request)**. |
 | `SUBMIT_WORK_REQUEST` | Find block by header_hash, fill in nonce/mixhash, `MinorBlockChain.InsertChain` | Find payload by header_hash, fill in nonce/mixhash, `engine_newPayload` + `engine_forkchoiceUpdated` (§9.2). **Full call-flow trace: [Appendix B.6](#b6-submit_work_request)**. |
+
+**Not listed above**: `GET_NEXT_BLOCK_TO_MINE_REQUEST` — a legacy cluster RPC where master asks slave directly for a minor block template. In production, remote mining flows through `GET_WORK_REQUEST` / `SUBMIT_WORK_REQUEST` (above) and in-process mining stays inside the slave's own `Miner`; neither path uses `GET_NEXT_BLOCK_TO_MINE_REQUEST`, leaving it called only from `test_cluster.py`. The new CL needs no separate design for it — should it ever be revived, template construction reuses the exact `engine_forkchoiceUpdated` + `engine_getPayload` machinery already in B.5.
 
 ---
 
@@ -837,7 +839,7 @@ Wire-level mechanics the new CL must implement. Not central to the validation ar
 Reference: [`quarkchain/protocol.py`](../quarkchain/protocol.py), [`quarkchain/cluster/protocol.py`](../quarkchain/cluster/protocol.py).
 
 Field semantics:
-- `branch`: shard identifier; `ROOT_BRANCH` = `0x1` for root chain / cluster control plane.
+- `branch`: shard identifier; `ROOT_BRANCH = Branch(0)` ([protocol.py:9-10](../quarkchain/cluster/protocol.py#L9)) for root chain / cluster control plane.
 - `cluster_peer_id`: uint64 used for multiplexing (§A.4). `0` = intra-cluster RPC.
 - `op`: opcode from `ClusterOp` enum ([rpc.py:1037](../quarkchain/cluster/rpc.py#L1037)).
 - `rpc_id`: `0` = fire-and-forget command; non-zero = RPC (request/response share the rpc_id).
