@@ -473,9 +473,9 @@ Throughout the rest of this document `PayloadAttributesV3QKC` and `ExecutionPayl
 
 ### 8.4 PoW seal across the CL/EL boundary
 
-Vanilla post-merge `ExecutionPayload` doesn't carry `Difficulty` or `Nonce` at all — geth hardcodes both to 0 in the reconstructed header — and the `MixDigest` slot is renamed to `prevRandao` and filled with beacon-chain RANDAO. QKC is PoW, so the patched-geth Engine API must:
+Vanilla post-merge `ExecutionPayload` doesn't carry `Difficulty` or `Nonce` at all — geth hardcodes both to 0 in the reconstructed header — and the `MixDigest` slot is renamed to `prevRandao`, filled with beacon-chain RANDAO, and exposed to the EVM as opcode `0x44` (EIP-4399). QKC is PoW, so the patched-geth Engine API must:
 
-- Carry `Difficulty` / `Nonce` / mixhash across the boundary somehow (extended fields, repurposed slots, or `extraData` packing — patched-geth's call).
+- Carry `Difficulty` / `Nonce` / mixhash across the boundary as fields on the extended `ExecutionPayloadV?QKC` (exact field layout is patched-geth's call). Critically, `MixDigest` carries the **PoW seal only** — see [§8.4.1](#841-prevrandao-vs-pow-mixhash) for why it cannot double as an EVM-observable randomness source.
 - Skip the post-merge `Difficulty == 0` / `Nonce == 0` checks in `verifyHeader`, and **don't re-verify PoW** — geth trusts the seal the CL handed it (same trust model as vanilla post-merge geth with its beacon CL). `Header.Hash()` already RLP-encodes the seal fields, so the committed block hash reflects the mined values automatically.
 
 `SealHash` (the header hash *excluding* `Nonce`/`MixDigest`, which the miner runs PoW against), difficulty calculation, and PoW verification are all **CL-side** — see the lifecycle below.
@@ -499,7 +499,25 @@ The high-level seal lifecycle stays the same regardless of wire choice:
 9. EL: tx execution + state/receipts validation + persist + payload-self-consistency check (recomputes Header.Hash() and rejects on mismatch — standard EL behavior, same as vanilla post-merge geth against its beacon CL)
 ```
 
-**EVM-level note**: post-merge Ethereum redefined opcode `0x44` from `DIFFICULTY` to `PREVRANDAO` (EIP-4399). For QKC's EVM upgrade, what `block.difficulty` / `block.prevrandao` actually return is a patched-geth decision (preserve the pre-Paris numeric-difficulty semantics, or move to PREVRANDAO with mixhash as the source). Either choice has implications for existing QKC mainnet contracts that read this opcode; audited under the patched-geth workstream, not here.
+#### 8.4.1 PREVRANDAO vs PoW mixhash
+
+In vanilla post-merge Eth, `header.MixDigest` doubles as `prevRandao` and is fed to the EVM via opcode `0x44`. That works only because the beacon CL determines `prevRandao` **before** EL executes the block, so the value is stable across template build, sealing, and any re-execution.
+
+QKC's mixhash has the opposite property — it's produced by PoW **after** state execution. If we let the EVM read it during template build (step 2 above), the result would be:
+
+```
+step 2: EL executes txs with mixhash = placeholder  → stateRoot_A
+step 6: CL replaces mixhash with the actual PoW result
+step 9: EL re-executes for verification → opcode reads the new mixhash
+        → different VM behavior → stateRoot_B ≠ stateRoot_A → INVALID
+```
+
+Chicken-and-egg: the EVM can't observe a value that doesn't exist yet. So in QKC patched-geth:
+
+- **`header.MixDigest` carries the PoW seal only** — read by PoW verification, never by the EVM.
+- **Opcode `0x44` keeps QKC's legacy semantics across the EVM upgrade**: it returns `header.difficulty` (numeric, known pre-execution, stable). No fork-by-height switch for this opcode; historical blocks and future blocks behave identically here. This preserves mainnet replay parity (§13 M5) and lets existing QKC contracts that read `block.difficulty` keep working unchanged.
+
+The trade-off: contracts written assuming Ethereum's post-Paris `PREVRANDAO` semantics (a 32-byte unpredictable value) will not get that on QKC — they will observe a numeric `header.difficulty`, the same value QKC has exposed at this opcode all along. Strong-RNG use cases should use VRFs / oracles regardless; this opcode's value is only a "weak" randomness source on any chain. The divergence is intentional: keeping legacy QKC semantics minimizes patched-geth surface (no activation logic for `0x44`) and keeps the entire chain history reproducible under one uniform rule.
 
 > **`headerBridge` shorthand**, used throughout the rest of this document: a CL-side codec that converts between the three formats CL touches — wire `MinorBlock`/`MinorBlockHeader`, the patched-geth `ExecutionPayloadV?QKC`, and the internal `types.Header` CL needs for `SealHash` computation. Without regenesis the conversions are non-trivial (QKC's wire formats differ from vanilla geth's), but they're pure field re-packs — no consensus logic.
 
