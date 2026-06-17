@@ -107,7 +107,7 @@ never edit in place).
 cmd/slave/
   main.go          urfave/cli v2 app; default Action = run slave (cluster.py drop-in)
   configcmd.go     `slave config`   — parse, validate, print  (Milestone 1)
-  genesiscmd.go    `slave genesis`  — derive & print root/shard genesis (Milestone 2)
+  genesiscmd.go    `slave genesis`  — derive & print root/shard genesis (Milestone 1)
   inspectcmd.go    `slave inspect`  — offline datadir inspection (Milestone 4)
 
 qkc/account/        reused as-is from qkc-2-base: 24-byte QKC address + Branch
@@ -439,9 +439,9 @@ skeleton on top.
 
 | Milestone | Deliverable | Demo |
 | --- | --- | --- |
-| **M1 — Config** | Reuse `qkc/account` (already on qkc-2-base); config layer with `Validate()` + `ResolveSlave`; `cmd/slave` skeleton + `config` subcommand; fixture. | `slave config --cluster_config <f> --node_id S0` prints a normalized summary and `config OK`; `--node_id S9` exits non-zero. |
-| **M2 — Root genesis** | `qkc/types` (RootBlockHeader, TokenBalances); `qkc/genesis.RootBlock`; `genesis` subcommand. | `slave genesis --cluster_config <f>` prints a hash identical to pyquarkchain's; pinned in test. |
-| **M3 — Boot** (issue core) | `qkc/shard` (genesis descriptor + `ShardChain` seam **stub** + genesis metadata + injection points); `qkc/slave` (eager boot, rollback, blocking stop); default run Action with signal handling. | Boot from fixture → per-shard "shard started" logs → `^C` clean exit 0 → rerun reopens idempotently. |
+| **M1 — Config + root genesis** | Reuse `qkc/account` (already on qkc-2-base); config layer with `Validate()` + `ResolveSlave`; `qkc/types` (RootBlockHeader, TokenBalances); `qkc/genesis.RootBlock`; `cmd/slave` skeleton + `config` and `genesis` subcommands; fixtures. | `slave config --cluster_config <f> --node_id S0` prints a normalized summary and `config OK` (`--node_id S9` exits non-zero); `slave genesis --cluster_config <f>` prints a root genesis hash identical to pyquarkchain's, pinned in test. |
+| **M2 — Shard skeleton** | `qkc/shard`: genesis descriptor + `ShardChain` seam **stub** + genesis metadata (rawdb) + `Reconcile()` + per-shard db open + injection points. | Construct a single shard from the fixture into `t.TempDir()`; genesis-metadata round-trips and `Reconcile()` passes on reopen. |
+| **M3 — Slave boot + lifecycle** (issue core) | `qkc/slave` (eager boot, partial-failure rollback, blocking stop); default run Action with signal handling. | Boot S0 from fixture → per-shard "shard started" logs → `^C` clean exit 0 → rerun reopens idempotently. |
 | **M4 — Observability** | `slave inspect`; goleak-wrapped smoke test; failure-injection tests; cmd README. | `slave inspect --datadir <d>` dumps per-shard state; tampering with the config yields a loud mismatch error; goleak test passes. |
 
 ## Alternatives considered
@@ -456,7 +456,7 @@ skeleton on top.
 
 ## Open questions and future work
 
-- **Pinned-hash provenance.** M2's cross-check requires a working pyquarkchain Python
+- **Pinned-hash provenance.** M1's root-genesis cross-check requires a working pyquarkchain Python
   environment at implementation time to generate the pinned values; the regeneration
   command is stored beside each pinned value.
 - **goleak allowlist.** The allowlist for geth/pebble background goroutines risks masking a
