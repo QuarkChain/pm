@@ -99,9 +99,7 @@ Two reference implementations inform the design:
 
 ## Architecture overview
 
-All code lands under new packages; no geth source file is modified, per the project rule
-that geth logic is treated as reference and QKC behavior lives in new files (wrap/copy,
-never edit in place).
+All code in this design lands under new packages; geth's own source is not modified. QKC behavior lives in new files that wrap or copy geth instead of editing it in place.
 
 ```
 cmd/slave/
