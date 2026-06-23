@@ -94,7 +94,7 @@ Two reference implementations inform the design:
 | **full shard id** | 32-bit shard identifier, `(chain_id << 16) \| shard_size \| shard_id`. Serialized in config as a hex string, e.g. `"0x00010001"`. |
 | **root genesis block** | The cluster's single genesis root block, derived purely from `ROOT.GENESIS`. Its hash anchors every shard genesis. |
 | **shard genesis** | A shard's block 0, linked to the root genesis by `hash_prev_root_block` and an initial cross-shard cursor `(root_height, 0, 0)`. |
-| **slave identity** | The `ID` string (e.g. `"S0"`) selecting one `SLAVE_LIST` entry; determines which shards this process owns. |
+| **slave identity** | The `ID` string (e.g. `"S0"`) selecting one `SLAVE_LIST` entry; determines which shards this process runs (other slaves may run the same shard as replicas). |
 | **genesis metadata** | The QKC-specific genesis facts (prev-root-block hash, xshard cursor, full shard id) recorded in the shard chaindb because geth's stock block format has no field for them; their native home arrives with the QKC block format (#1). |
 
 ## Architecture overview
@@ -182,11 +182,21 @@ Two design choices distinguish this from goquarkchain:
 
 1. **Validation at load time.** `LoadClusterConfig` runs `Validate()` before any database
    is opened: every full shard id in the resolved slave must resolve to a configured
-   chain/shard; no shard may be owned twice; `ShardGenesis.ROOT_HEIGHT` must equal
+   chain/shard; the resolved slave's own `FULL_SHARD_ID_LIST` must contain no duplicate
+   entries; `ShardGenesis.ROOT_HEIGHT` must equal
    `ROOT.GENESIS.HEIGHT` (this issue derives only the genesis root block); hex fields
    must be well-formed. The on-branch `qkc/config` validates inside `UnmarshalJSON` via
    `panic` (`initAndValidate`); this issue adds a non-panicking `Validate()` that returns
    errors before any database opens.
+
+   The duplicate check is deliberately **intra-slave only** — it forbids the same id twice
+   *within one slave's list*, not the same id across slaves. pyquarkchain treats a full shard
+   id appearing in multiple slaves' `FULL_SHARD_ID_LIST`s as a valid multi-replica deployment:
+   `branch_to_slaves` is `Dict[int, List[SlaveConnection]]`
+   ([`master.py:1122`](https://github.com/QuarkChain/pyquarkchain/blob/master/quarkchain/cluster/master.py#L1122),
+   "Slaves may run multiple copies of the same branch"), with writes fanning out to every
+   replica and reads/PoSW taking the first. Global shard-coverage and
+   replica-sanity validation belong at the master layer (a follow-up) and must allow replicas.
 
 2. **Narrowed ownership.** `ResolveSlave(nodeID)` returns a `SlaveContext` carrying only
    the resolved `SlaveConfig`, the `*QuarkChainConfig`, and `DBPathRoot`. The
@@ -402,7 +412,7 @@ A second, small `ALLOC`-bearing fixture (a handful of multi-token allocations) e
 | --- | --- | --- |
 | Unknown `--node_id` | `ResolveSlave` | Exit non-zero: `unknown node id "S9" (config defines: S0)`. |
 | Shard id not in any chain | `Validate()` | Reject at load, before any db opens. |
-| Duplicate shard ownership | `Validate()` | Reject at load. |
+| Duplicate full shard id within this slave's `FULL_SHARD_ID_LIST` | `Validate()` | Reject at load (intra-slave only; the same shard on multiple slaves is a valid replica setup, not an error). |
 | Legacy `CHAIN_MASK_LIST` | parse | Explicit "legacy config not supported". |
 | Genesis changed since init | `Reconcile()`: genesis-metadata compare on reopen (the chain's own genesis check stacks on once real) | Exit 1: `shard 0x… : stored genesis 0x… does not match config genesis 0x… (db …) — cluster config changed since initialization`. |
 | One shard fails mid-boot | `slave.New` | Roll back started shards (close dbs), return error; datadir remains reopenable. |
@@ -415,7 +425,8 @@ test.
 
 - **Config** (`qkc/config`): parse the pinned fixture and assert exact values (full shard
   ids, consensus types, root genesis difficulty/timestamp, db path); error-path tests for
-  unknown node id, duplicate shard, bad hex, and `CHAIN_MASK_LIST` rejection; parse the
+  unknown node id, a duplicate full shard id within one slave's list, bad hex, and
+  `CHAIN_MASK_LIST` rejection; parse the
   larger real `testnet/ci-qkcli/cluster_config.json` to prove tolerance of nulls and extra
   fields.
 - **Genesis** (`qkc/genesis`, `qkc/types`): table-driven tests pinning the serialized
