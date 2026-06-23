@@ -259,6 +259,18 @@ seam and ships a stub. What the slave owns at genesis time is two artifacts:
    This is the issue's answer to where the QKC genesis linkage lives until the QKC block
    format (#1) gives `HashPrevRootBlock` / `XShardCursor` a native home in the header.
 
+   **Marked temporary in code, not just here.** This record is a scaffold that exists only
+   because geth's stock header has nowhere to put these facts yet, so its temporariness must
+   live in the source, not merely in this doc. The implementation tags the `GenesisMeta`
+   struct, its `qkc/shard/rawdb.go` accessors, and the `Reconcile()` path with a grep-able
+   marker — e.g. `// TODO: temporary — remove once QKC block format (#1) lands` — that states
+   plainly: when #1 merges this code is **re-implemented, not patched**. At that point
+   `FullShardID`, `HashPrevRootBlock`, and `XShardCursor` are read from the genesis block's
+   own header/meta, and `Reconcile()` switches to the geth-native genesis-hash check
+   (`SetupGenesisBlock`-style — comparing the genesis block itself rather than a side record).
+   The `GenesisMeta` record is then **deleted, not migrated**: at that stage the db holds only
+   the genesis block, so a `--clean` re-bootstrap suffices and no migration code is written.
+
 Reproducing pyquarkchain's minor-block genesis hash, and cross-checking the genesis state
 root against pyquarkchain's `create_minor_block`, both belong to the chain task (which owns
 state materialization and the QKC block format) and are out of scope here.
@@ -448,7 +460,7 @@ skeleton on top.
 | --- | --- | --- |
 | Host the shard chain behind a stubbed `ShardChain` seam | Own the geth-core shard chain in this issue | Adapting geth's core to QKC chains (and `ALLOC`→state) is a separate task; geth `core.BlockChain` and `qkc/core.MinorBlockChain` are the same component. This issue ships the slave skeleton + seam + stub and connects the real chain later. |
 | Host the shard chain behind a seam | Wrap `eth.Ethereum` as the chain | Pulls in the devp2p handler, downloader, and snap-sync a QKC slave must not join; multiple shards would need multiple `node.Node` stacks. |
-| Genesis metadata record for QKC genesis facts | Extend geth's block format now | QKC block format is #1's job; a small metadata record keeps this issue additive and reversible. |
+| Genesis metadata record for QKC genesis facts | Extend geth's block format now | QKC block format is #1's job; a small metadata record keeps this issue additive and reversible. It is tagged temporary in code and, when #1 lands, deleted (not migrated) — `Reconcile()` switches to the geth-native genesis-block check. |
 | Eager shard boot | pyquarkchain `PING`-triggered creation | Chosen so the node can be brought up and verified with no master yet in existence; it is interim scaffolding, replaced by the `PING` trigger in #5, not a claim that eager boot is superior. |
 | Map-only `TokenBalances` | Trie-backed `TokenBalances` | Genesis needs only the map encoding; the trie version drags in `triedb`. |
 
