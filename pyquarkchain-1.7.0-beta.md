@@ -1,4 +1,4 @@
-# Testing pyquarkchain v1.7.0-beta (Python 3.13)
+# Releasing pyquarkchain v1.7.0-beta (Python 3.13)
 
 We have released **pyquarkchain v1.7.0-beta**, which brings the QuarkChain mainnet client onto **Python 3.13** and a modern dependency stack. The build is published as a Docker image and is currently in staging testing, ahead of the official 1.7.0 release. We are sharing it early and invite the community to join the testing before the final release.
 
