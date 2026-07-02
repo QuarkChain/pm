@@ -5,7 +5,7 @@ We have released **pyquarkchain v1.7.0-beta**, which brings the QuarkChain mainn
 ## TL;DR
 
 - **v1.7.0-beta** upgrades pyquarkchain from a much older Python version to **Python 3.13**, the current stable release, on a refreshed set of dependencies.
-- The change spans roughly 75 files, an upgraded native `pyethash` extension, and an expanded test suite. We also used **Anthropic's Claude Fable 5** for AI-assisted code review.
+- The change spans roughly 75 files, a modern storage-backend binding, an upgraded native `pyethash` extension, and an expanded test suite. We also used **Anthropic's Claude Fable 5** for AI-assisted code review.
 - The beta is available now as the `mainnet1.7.0-beta` [Docker image](https://hub.docker.com/r/quarkchaindocker/pyquarkchain). Node operators and developers are welcome to run it and report issues before we tag 1.7.0.
 
 ## What's in the release
