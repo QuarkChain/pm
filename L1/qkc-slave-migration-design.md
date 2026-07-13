@@ -5,9 +5,12 @@
 Migrate the Slave component in QuarkChain cluster communication from Python to Go while maintaining byte-level protocol
 compatibility with the Python Master.
 
-The Python implementation is the only protocol specification.
+The Python implementation remains the sole protocol specification.
 
-## 2. Boundary
+The goal of this phase is to complete the migration of the communication infrastructure while keeping the existing
+Python Master unchanged, providing a foundation for future business logic migration.
+
+## 2. Scope
 
 This phase implements:
 
@@ -38,20 +41,86 @@ This phase does not implement business logic, such as:
 | PR2 | Metadata and Opcode definitions            | ✅ Completed |
 | PR3 | Message definitions and protocol constants | Review      |
 | PR4 | RpcConn + XshardConn foundation            | Review      |
+| PR5 | MasterConn, handler registration           | Review      |
+| PR6 | PeerConn, Dispatcher, and peer routing     | Planned     |
+| PR7 | Slave runtime and lifecycle management     | Planned     |
 
-## 4. Migration Plan
+## 4. Communication Flow
+
+QuarkChain cluster communication consists of three communication paths:
+
+- Master ↔ Slave
+- Peer ↔ Slave (forwarded through Master)
+- Slave ↔ Slave
+
+### 4.1 Master → Slave RPC
+
+```
+        Master                        Slave (MasterConn)
+            │                                │
+            │──[TCP Frame]──────────────────►│
+            │  12B ClusterMetadata +         │
+            │  op + rpc_id + payload         │
+            │                                │── cluster_peer_id == 0
+            │                                │── lookup MASTER_OP_RPC_MAP
+            │                                │── dispatch handler
+            │◄──[TCP Frame]──────────────────│── return response
+            │  12B ClusterMetadata +         │
+            │  op + rpc_id + payload         │
+```
+
+### 4.2 Peer Virtual Connection Forwarding
+
+```
+    External P2P Peer       Master           Slave (MasterConn)
+            │                    │                        │
+            │──[P2P Frame]─────►│                        │
+            │                    │── convert to ClusterMetadata
+            │                    │──[Cluster Frame]─────►│
+            │                    │                        │── cluster_peer_id ≠ 0
+            │                    │                        │── route to PeerConn
+            │                    │◄──[Cluster Frame]─────│── return response
+            │◄──[P2P Frame]─────│                        │
+```
+
+### 4.3 Slave → Slave RPC
+
+```
+        Slave A (XshardConn)          Slave B (XshardConn)
+            │                                │
+            │──[TCP Frame]──────────────────►│
+            │  0B Metadata +                 │
+            │  op + rpc_id + payload         │
+            │                                │── lookup XSHARD_OP_RPC_MAP
+            │                                │── dispatch handler
+            │◄──[TCP Frame]──────────────────│── return response
+            │  0B Metadata +                 │
+            │  op + rpc_id + payload         │
+```
+
+## 5. Migration Plan
 
 ```
 PR1-PR3 (Protocol foundation layer)
 ↓
-PR4 (RpcConn / XshardConn / Xshard Handler registration)
+PR4 (RpcConn / XshardConn)
 ↓
-PR5 (MasterConn / Master Handler registration and dispatch)
+PR5 (MasterConn)
 ↓
-PR6 (PeerConn / Dispatcher / Peer Handler registration and dispatch)
+PR6 (PeerConn / Dispatcher)
 ↓
-PR7 (SlaveServer Runtime)
+PR7 (Slave Runtime)
 ```
+
+### PR4: RpcConn + XshardConn
+
+Corresponding Python components: `Connection`, `SlaveConnection`
+
+Main contents:
+
+- RpcConn: connection framework (TCP read/write loops, RPC ID management, request/response matching)
+- XshardConn: Slave-to-Slave TCP connections (0B Metadata)
+- Xshard handler registration and Ping/Pong handshake
 
 ### PR5: MasterConn
 
@@ -76,7 +145,7 @@ Main contents:
 - Peer Handler registration and dispatch framework
 - Stub implementations for Handlers depending on business components
 
-### PR7: SlaveServer Runtime
+### PR7: Slave Runtime
 
 Corresponds to Python: `SlaveServer`
 
@@ -87,7 +156,7 @@ Main contents:
 - Dispatcher orchestration
 - Wiring of all components
 
-## 5. Handler Implementation Strategy
+## 6. Handler Implementation Strategy
 
 Handlers are categorized by connection type:
 
@@ -118,23 +187,27 @@ The goal of the Stubs is to ensure:
 - RPC request/response flow is complete
 - Protocol-compatible placeholder responses are returned
 
-## 6. Testing
+## 7. Testing
 
 The Python implementation is the protocol authority.
 
-Compatibility coverage:
+Testing is performed in two stages:
 
-- Frame encoding/decoding
-- Metadata encoding
-- Opcode mapping
-- Message serialization
+- PR1–PR6: Use Python-generated test vectors and lightweight Python protocol peers to validate serialization, RPC flows,
+  and connection lifecycles. These protocol peers are used solely for protocol compatibility testing and do not require
+  a full Python Master or business components.
+- PR7: Run end-to-end interoperability tests using a real Python Master and the Go Slave implementation.
+
+Testing focuses on:
+
+- Frame and Metadata compatibility
+- Message serialization compatibility
 - RPC request/response flow
-- Connection lifecycle
+- Master-Slave communication
+- Slave-Slave communication
+- Peer communication
 
-Test vectors generated by the Python implementation should be used whenever possible. Do not rely solely on Go self
-encode/decode tests.
-
-## 7. Expected Result
+## 8. Expected Result
 
 After completing PR1-PR7:
 
