@@ -1,288 +1,208 @@
-# Minor Block Commit Status — Design & Review Doc
+# Minor Block Commit Status - Review Doc
 
-> In one line: split a minor block's "data is local" state from its "commit is
-> done" state, and tighten the concurrency between head rewind / root reorg /
-> commit along the way. The implementation is split into 3 stacked PRs.
+> This set of PRs fixes one main issue: "the minor block body is in the DB" should not mean
+> "broadcast / report is already finished". It also serializes head rewind, root reorg, and commit,
+> because those paths can otherwise step on each other.
 
-This doc gives the whole picture of the change set: first the problem and the
-overall approach, then what each of the 3 PRs does, where to focus your review,
-and how tests cover it. Read it in the order **this doc → PR1 → PR2 → PR3**:
-the PRs have a strict dependency chain (concurrency first, then semantics, then
-the feature), explained below.
+Please read in this order: **this doc -> PR1 -> PR2 -> PR3**.
 
-## Background: a block actually has several independent "states"
+## Background
 
-Building the model from scratch. On a local node, a minor block can be in any
-combination of these independent states:
+On a local node, a minor block is not just "present / absent":
 
-1. **body present**: the block's content is written to the local DB (you can read the block).
-2. **state present**: the block's state trie is local, so you can execute on top of it / query balances.
-3. **broadcast / report done**: the x-shard tx list has been broadcast to neighbor shards, and the block header has been reported to master.
-4. **commit marker present**: an explicit marker meaning "this block's shard-side commit flow (step 3) is fully done."
+1. **body present**: the block can be read from the DB.
+2. **state present**: the local node still has this block's state trie in DB or memory, so it can execute the next block or query state.
+3. **broadcast / report done**: the x-shard tx list has been broadcast, and the minor header has been reported to master.
+4. **commit marker present**: step 3 is done, and CommitStatus has been saved to the DB.
 
-The core problem: **the old code conflated 1 and 4.**
+The issue is: **the old code mixed 1 and 4 together.** `HasBlock` was effectively the same as
+"commit marker present", because `WriteBlockWithState` wrote the marker right after writing body/state.
+So "the DB can now read the body" was treated as "broadcast / report is also done."
 
-In the old logic `HasBlock` was effectively equivalent to "commit marker present",
-because `WriteBlockWithState` wrote the marker right after writing body/state.
-So "a body was just persisted locally" was treated as "this block's outward
-commit is done."
+This affects several failure and recovery paths:
 
-That looks fine under normal sequential execution, but it breaks on these paths:
+- After crash / restart, the node cannot tell "committed" from "only the local body was written".
+- Head rewind can delete a body while another path writes the marker, leaving a marker whose body is gone.
+- Root reorg updates head/rootTip/currentEvmState in multiple steps, so other code can observe mismatched state.
 
-- **Crash / restart recovery**: can't tell whether a block is "committed" or "just has a body on disk, broadcast/report not sent yet."
-- **Head rewind (`SetHead`)**: rewind deletes the body, but if another goroutine is writing the marker for the same block at that moment, you can end up with a **marker pointing at an already-deleted body** — a state that can never be consistent.
-- **Root reorg**: `currentBlock` / `rootTip` / `currentEvmState` are published in several steps, so a reader can observe mutually inconsistent combinations mid-flight.
-- **Sidechain replay / sync retry**: can't distinguish "should skip" / "should replay" / "should re-commit."
+## Split Order
 
-## Overall approach
+The code is split into 3 dependent PRs:
 
-Three steps, one per PR, and the order matters:
+1. **Fix concurrency first** (PR1). Later PRs move commit marker writes from right after saving the body to
+   after x-shard broadcast / report. That makes the time between "body is in the DB" and "marker is written" longer.
+   Before changing marker semantics, rewind / root reorg must not conflict with import / commit during
+   that period. PR1 serializes those paths under the same locks, and publishes currentBlock / rootTip /
+   currentEvmState / canonical index under the same lock acquisition.
+2. **Then split the state semantics** (PR2). With PR1's locking and publish order in place, PR2 can safely
+   make body present != committed, and make the shard layer write the marker only after broadcast / report
+   succeeds. `CommitMinorBlockByHash` can then check that the body still exists before writing the marker,
+   preserving `marker => body`.
+3. **Then update sync / replay behavior** (PR3). PR3 depends on the new PR2 API meaning: `HasBlock` means body,
+   and `HasCommittedBlock` means commit is done. For ancestor lookup, sync needs a more precise rule:
+   normal body/state blocks still require `HasCommittedBlock`; only pruned sidechain blocks can use
+   `HasBodyWithoutState` as local data. This avoids re-downloading historical bodies and recovers
+   historical blocks that have body but miss the marker.
 
-1. **Fix the concurrency first** (PR1), via two means: (a) add / widen locking on
-   rewind / root reorg / import so paths that were not mutually exclusive now
-   serialize under the same locks; (b) publish currentBlock / rootTip /
-   currentEvmState / canonical index inside one critical section, so readers
-   never see a half-updated intermediate state.
-2. **Then split the state semantics** (PR2). Make "body present" ≠ "committed";
-   the marker is written explicitly by the shard layer only after broadcast /
-   report succeed.
-3. **Finally build the feature on the new semantics** (PR3). A body doesn't mean
-   committed, but it can still serve as a local sync anchor — avoiding re-download
-   of history bodies already in the DB — and recover history blocks that "have a
-   body but miss the marker."
+After the split, each interface has one job:
 
-After the split the semantics become three clear predicates:
-
-| Predicate | Meaning | Typical use |
+| Interface | Meaning | Typical use |
 | --- | --- | --- |
-| `HasBlock(hash)` | body present | whether the body needs to be persisted again |
-| `HasCommittedBlock(hash)` | body **and** commit marker both present | sync deciding "is this block really done" |
-| `HasBodyWithoutState(hash)` | body present but state not local | anchor for a pruned sidechain |
+| `HasBlock(hash)` | body present | whether the body needs to be written again |
+| `HasCommittedBlock(hash)` | body **and** commit marker both present | sync deciding whether this block is really done |
+| `HasBodyWithoutState(hash)` | body present but state not local | pruned sidechain body is already local |
 
-## How the code is split
+## PR Split
 
-All three PRs are carved out of the original large branch, stacked
-(PR3 depends on PR2, PR2 depends on PR1).
+All three PRs are split out from the original large branch and are stacked: PR3 depends on PR2, PR2 depends on PR1.
 
 ### PR 1 · `fix/minor-chain-head-locking`
 
-**Theme**: serialize minor head rewind and root reorg, and make head publication
-atomic. This PR does not touch commit marker semantics.
+**Theme**: serialize minor head rewind and root reorg, and publish head-related fields together.
+This PR does not change commit marker semantics.
 
-Commits: `f1f0f50` (core-layer locks and head publication), `f40beb8`
-(shard-layer `AddRootBlock` serialization).
+Issue / impact:
 
-Files: `core/minorblockchain.go`, `core/minorblockchain_addon.go`,
-`cluster/shard/api_backend.go`.
+- `SetHead` / root reorg can conflict with minor block import / commit, so a body may be deleted while still being committed or referenced.
+- During root reorg, head, root tip, EVM state, and canonical index are published in separate steps; other code can observe inconsistent state.
 
-Key points:
+Root cause:
 
-- Make `SetHead` / `Reset` / `ResetWithGenesisBlock` hold both `chainmu` + `mu`,
-  so rewind and import are mutually exclusive (old code: rewind held only
-  `chainmu`, import held only `mu` — they were not mutually exclusive).
-- When taking both locks, follow the existing order **`s.mu (shard) → chainmu →
-  mu (core)`**, consistent with the insert pipeline (`InsertChainForDeposits`
-  holds `chainmu`, `WriteBlockWithState` takes `mu`), to avoid introducing a new deadlock.
-- `setHead` now **validates the target state is usable first, then deletes bodies
-  above the target, and finally publishes** `currentEvmState` + DB head hash +
-  `currentBlock` in one shot. I.e. the irreversible delete happens only after the
-  state check passes: either it fails and returns an error with no body deleted
-  (safe to retry), or it deletes all the way through. The old code did "delete
-  bodies first, then discover the target state is missing," which could only fall
-  all the way back to the genesis block.
-- Root reorg keeps the target block in a local variable and publishes the head in
-  one shot only after canonical index / rootTip / confirmedHeaderTip / EVM state are all ready.
-- The no-head-publish path of root reorg only rewrites canonical hashes and
-  **does not delete sidechain bodies**, so a later root reorg can switch back.
-- `ShardBackend.AddRootBlock` takes `s.mu`, serializing root block handling with
-  the shard-side broadcast / report of `AddMinorBlock` / `AddBlockListForSync`.
+- rewind / root reorg / import were not fully serialized by the same set of locks.
+- head-related fields were written step by step instead of computing the target first and publishing together.
 
-Reviewer focus:
+Fix:
 
-- Is the lock order always `s.mu → chainmu → mu`? Any path acquiring in reverse that could deadlock?
-- Are `currentBlock` / `currentEvmState` / rootTip / canonical index published within the same critical section?
-- On a rewind error, is it guaranteed that "bodies are never deleted before returning the error"?
+- Use the lock order `s.mu -> chainmu -> mu`, so rewind / root reorg / import are mutually exclusive.
+- `setHead` validates the target state first, then deletes bodies, then publishes head/state together.
+- root reorg publishes root tip, confirmed tip, EVM state, and head together at the end; the no-head-publish path only rewrites canonical hash and does not delete sidechain bodies.
+
+Review focus:
+
+- Any reverse lock order or re-entrant deadlock?
+- Are head, root tip, EVM state, and canonical index published under the same lock acquisition?
+- If rewind returns an error, can it return after deleting bodies?
 
 ### PR 2 · `fix/minor-block-commit-status`
 
-**Theme**: split "body present" from "committed." This is the semantic core of the change set.
+**Theme**: split "body present" from "committed".
 
-Commits: `3ea16ad` (semantic core + call sites across layers + race tests),
-`79d7f18` (commit-recovery invariant tests).
+Issue / impact:
 
-Files: core (`minorblockchain*.go`, `rootblockchain.go`), shard (`api_backend.go`,
-`shard.go`), slave (`api_backend.go`), sync (`minor_task.go`, `root_task.go`,
-`sync.go`), and their tests.
+- Body/state in the DB does not mean x-shard broadcast and master header report are done.
+- The old code mixed body present with committed, so after crash / retry it could not tell which blocks still needed commit side effects.
+- During concurrent rewind, a marker could be written for a block whose body was already deleted.
 
-Key points:
+Root cause:
 
-- `WriteBlockWithState` / `insertSidechain` **no longer auto-write the commit
-  marker**; the marker is written explicitly by the shard layer only after
-  x-shard broadcast + master header report succeed.
-- `HasBlock` is narrowed to "body present"; a new `HasCommittedBlock` means body + marker.
-- `CommitMinorBlockByHash` checks under `m.mu` whether the body still exists
-  before writing the marker; if the body was deleted by a rewind, it returns
-  `false`. This is the last gate for the "marker ⟹ body" invariant.
-- sync / slave decide "is it done" via `HasCommittedBlock`, no longer mistaking a body-only block for committed.
-- A block with body/state but missing marker can be retried: re-send
-  broadcast / report, then write the marker. This relies on **force insert** (next point).
-- **force insert**: shard-layer imports (`AddMinorBlock` / `AddBlockListForSync`)
-  all call `InsertChainForDepositsWithBlocks` with `force=true`. Its purpose is to
-  make the validator **skip the `ErrKnownBlock` short-circuit** — under the old
-  behavior a block that "already has body/state" was rejected as a known block,
-  so a block missing its marker could never get one written. With `force=true`:
-  if a block already has body+state, it is **re-executed only to recompute the
-  x-shard list** (head untouched, body not rewritten), then handed to the shard
-  layer to re-broadcast / re-report and write the marker. This is the mechanism
-  behind both "retry recovery" and how sidechain replay obtains the x-shard list.
-- Remove the deprecated `BLOCK_COMMITTING` placeholder state.
+- `WriteBlockWithState` wrote the commit marker while writing body/state, marking the block committed too early.
+- `HasBlock` meant both "does the body exist" and "is commit done".
+- Marker write was not an atomic check-and-write with body existence.
 
-Reviewer focus:
+Fix:
 
-- For every "skip a block we already have" check, confirm one by one whether it should use `HasBlock` or `HasCommittedBlock` (this is the easiest place to get wrong).
-- Before writing the marker, are the x-shard broadcast and master header report actually complete?
-- On a marker-write failure, is it guaranteed to never leave a "marker pointing at a missing body"?
-- Does `DeleteMinorBlock` delete the body and marker in the same batch (so the rollback side also holds the invariant)?
-- In the `force=true` "block already has body+state" branch, does it **only
-  recompute the x-shard list, without changing the head / rewriting the body** —
-  so force can't overwrite already-correct data or wrongly advance the head?
+- `WriteBlockWithState` / `insertSidechain` no longer auto-write the commit marker. The marker is written only by the shard layer after x-shard broadcast + master header report succeed.
+- `HasBlock` now only means "body present"; add `HasCommittedBlock` for body + marker.
+- `CommitMinorBlockByHash` checks under `m.mu` that the body still exists before writing the marker. If rewind already deleted the body, it returns `false`.
+- sync / slave use `HasCommittedBlock` when deciding whether a block is complete, so body-only blocks are not treated as committed.
+- Blocks with body/state but missing marker can be re-executed to recompute the x-shard list, then broadcast / reported / marked.
+- Remove the obsolete `BLOCK_COMMITTING` placeholder state.
+
+Review focus:
+
+- Should each call site use `HasBlock` or `HasCommittedBlock`?
+- Is the marker written only after broadcast / report succeeds?
+- Does `marker => body` hold on both commit and delete paths?
 
 ### PR 3 · `fix/minor-sidechain-body-anchor`
 
-**Theme**: let sidechain / pruned bodies serve as a sync anchor, and recover
-history blocks missing their marker. Built on PR2's new semantics.
+**Theme**: handle the sync / sidechain replay code that has to change after PR2 splits marker semantics.
 
-> A pruned body is a block whose body is still present but whose state trie has
-> been pruned away — i.e. the `HasBodyWithoutState` case above.
+> A pruned body means the body is still present but the corresponding state trie was pruned, i.e. the
+> `HasBodyWithoutState` case above.
 
-Commits: `d887d70`, `fad5e1b` (comment clarification of sidechain replay retry behavior).
+First, what insert sidechain / sidechain replay means (following the go-ethereum mechanism)
 
-Files: `cluster/shard/api_backend.go`, `cluster/sync/minor_task.go`,
-`cluster/sync/sync.go`, `core/minorblockchain.go`, `core/rootblockchain.go`, and their tests.
+- When importing a batch, if the fork point is too old and the parent's **state trie has been pruned**
+  (`ErrPrunedAncestor`), the chain enters sidechain import: those blocks **only write body, not state,
+  not canonical index, and not commit marker**. The fork may never be adopted, so keeping only the body is cheap.
+- Only when this fork's **cumulative height / difficulty exceeds the current main chain** and the node really
+  switches to it does replay start from the nearest ancestor that still has state. The body-only blocks are
+  replayed one by one to rebuild state, and reorg moves the canonical chain to that fork. This is the step
+  that produces x-shard lists, so this is also when broadcast / report / marker writes are needed.
+- For this change set: **normal body/state blocks still need `HasCommittedBlock` to count as ancestors;
+  only pruned sidechain blocks can use `HasBodyWithoutState` as local data to avoid re-download**.
+  That still does not mean committed. During replay + reorg, one pass can replay multiple historical blocks,
+  and each of them must complete broadcast / report / marker write in order.
 
-Background: what insert sidechain / sidechain replay is (following go-ethereum's mechanism)
+Issue / impact:
 
-- When importing a batch, if the fork point is too old and the parent's
-  **state trie has been pruned** (`ErrPrunedAncestor`), it enters sidechain
-  import: those blocks **only write the body — no state, no canonical index, no
-  commit marker**. Since this fork may never be adopted, just storing the body
-  is enough and cheap.
-- Only when this fork's **cumulative height / difficulty exceeds the current main
-  chain**, and we actually switch to it, do we start from "the nearest ancestor
-  that still has state," **replay** (re-execute) each body-only block to produce
-  state, then reorg the main chain onto this fork. Only this step produces the
-  x-shard list, and only then do broadcast / report / write-marker run.
-- So for this change set: **body present = usable as a sync anchor (no re-download);
-  but body present ≠ committed**. During replay + reorg, one pass may replay
-  multiple history blocks, and each must complete broadcast / report / write-marker
-  in order to count as committed.
+- **Existing pruned sidechain bodies may be downloaded again**: after PR2, body-only no longer means committed.
+  Normal body/state blocks still use `HasCommittedBlock`; but for `HasBodyWithoutState` pruned sidechain blocks,
+  the body is already in the DB. If sync does not treat those blocks as local, `findAncestor` can walk past
+  them and re-download historical bodies from peers.
+- **Sidechain replay may miss the commit step for historical blocks**: when a pruned sidechain becomes
+  canonical, replay can execute multiple historical blocks and produce an x-shard list for each block.
+  The old shard commit path was mostly written for "the single block or blocks currently requested", not for
+  "commit multiple replayed historical blocks in order".
+- **A parent with body/state but missing marker can block live propagation**: if the node crashes after
+  body/state write but before marker write, then after restart a child block sees the parent as not committed.
+  The node needs to finish broadcast / report / marker for the parent and earlier ancestors before processing the child.
 
-Key points:
+Root cause:
 
-- sync `findAncestor` can treat a body-only / body-without-state block as a local
-  anchor, avoiding re-download of history bodies already in the DB; returns an
-  explicit error when no common ancestor is found (no more nil-panic).
-- Sidechain replay can return the x-shard list of **multiple history blocks**,
-  broadcast / report / commit each in chain order.
-- `AddBlockListForSync` (the batch sync-import entry) now **imports by "contiguous
-  segment"** instead of the old block-by-block import:
-  - Iterate the batch, first skipping already-committed blocks and duplicate blocks within the batch (dedup);
-  - accumulate blocks that are number-contiguous and parent-linked into a segment;
-    once a gap is hit **within the same batch** (number not contiguous or parent
-    mismatch), import + commit the accumulated segment first, then keep
-    accumulating the next segment after the break, still within the same batch
-    (gap split). Here "commit" is the full PR2 flow (insert body/state → broadcast
-    x-shard → report master → write commit marker), with the marker as the final
-    step; "next segment" means the contiguous blocks after the break within the
-    same batch, still inside the same `AddBlockListForSync` call — not a new sync round;
-  - why: sidechain replay needs **a contiguous run of blocks** to replay from the
-    ancestor that has state; block-by-block insert cannot trigger a correct replay.
-- When `NewMinorBlock` hits a parent that "has body/state but misses the marker,"
-  it first tries to commit the uncommitted ancestors, then handles the current
-  block; when the parent is a body-only sidechain, it persists the child body
-  directly and lets a later replay rebuild the state.
-- The commit marker's meaning is unchanged: the marker is written only after
-  broadcast / report are sent; if the marker write fails the block stays
-  uncommitted and is re-sent by sync retry.
+- The old sync logic only had a committed / not-committed check, so it did not separately handle pruned sidechain bodies already in the DB.
+- The old shard commit path was single-block oriented and did not cover sidechain replay recovering multiple historical blocks at once.
+- `NewMinorBlock` assumed the current block could be handled directly, without first checking whether its parent chain had local blocks missing markers.
 
-Reviewer focus:
+Fix:
 
-- Does the body-only anchor **only widen the "we already have this data locally" check**, never mistaking a block for "commit done"?
-- Is the commit order of multi-block replay consistent with chain order?
-- After a replay / commit failure, does it rely on "staying uncommitted" so sync retries later, rather than leaving a half-committed state?
+- sync `findAncestor` uses `HasCommittedBlock || HasBodyWithoutState` for ancestor lookup:
+  normal blocks must be committed, while pruned sidechain blocks only need their body in the DB. This avoids
+  re-downloading historical bodies already in the DB; if no common ancestor is found, it returns a normal error instead of nil-panic.
+- sidechain replay can return x-shard lists for **multiple historical blocks**, and they are broadcast / reported / committed in chain order.
+- `AddBlockListForSync` imports by contiguous segment. If the batch is not contiguous, it commits the previous
+  segment first; the next segment still goes through normal parent/state validation, so a missing parent fails
+  and waits for a later sync retry.
+- `NewMinorBlock` first tries to finish uncommitted ancestors when the parent has body/state but misses marker; if the parent is a body-only sidechain block, it writes the child body to the DB and lets later replay rebuild state.
+- Commit marker meaning stays the same: write marker only after broadcast / report is sent; if marker write fails, the block stays uncommitted and sync retry sends it again.
 
-## Suggested review order
+Review focus:
 
-Read **PR1 → PR2 → PR3**; this order matches the dependencies, and reordering loses context:
+- Is `HasBodyWithoutState` used only as local sync data, never mistaken for committed?
+- Does multi-block sidechain replay commit in chain order?
+- After replay / commit failure, does the block stay uncommitted so sync retry can recover it?
 
-- PR1 first makes concurrency and head publication consistent (so splitting semantics later won't hit concurrency windows).
-- PR2 then changes commit marker semantics (relying on PR1's locks to hold the invariant).
-- PR3 finally uses the new semantics for the sidechain body anchor and retry recovery.
+## Test Plan
 
-## Test plan
+**Unit test**
 
-Idea: every PR's core risk has a test backing it; the most critical "marker ⟹
-body" invariant is pressed directly with race tests.
-
-Below is a "risk → test" mapping; reviewers can check each by test name.
-
-**core layer** (PR1 / PR2)
-
-- Don't write marker when body is absent; write only when body is present →
-  `TestCommitMinorBlockByHash_SkipsWhenBodyAbsent` / `TestCommitMinorBlockByHash_WritesWhenBodyPresent`
-- `HasBlock` means body present only (returns false when marker present but body absent) → `TestHasBlock_FalseWhenBodyAbsentButMarkerPresent`
-- `InsertChain` does not auto-write the marker after writing body/state → `TestInsertChain_BodyWrittenWithoutCommitMarker`
-- After head rewind / genesis reset, `currentBlock` and `currentEvmState` are
-  consistent → reuse existing reorg tests (`TestMinorLargeReorgTrieGC`,
-  `TestMinorChainTxReorgs`, etc.) + review; no dedicated test added.
-
-**shard layer** (PR2 / PR3)
-
-- `AddMinorBlock` / `AddBlockListForSync` explicitly write the marker on success →
-  `TestAddMinorBlock_CommitMarkerPresentAfterBlock` / `TestAddBlockListForSync_CommitMarkerPresentAfterSync`
-- A block with body/state but missing marker can be recovered on retry →
-  `TestAddBlockListForSync_RecoversXShardListOnRetry` / `TestNewMinorBlock_RecoversUncommittedBodyOnRetry` (both single-block retry)
-- Skip an already-committed block in the batch and keep processing the rest → `TestAddBlockListForSync_ContinuesPastKnownBlock`
-- **marker ⟹ body (invariant under concurrency)** → `TestAddMinorBlockMarkerBodyConsistencyUnderRace` /
-  `TestAddBlockListForSyncMarkerBodyConsistencyUnderRace` (`-race`, concurrent with `SetHead`)
-- TODO: **multi-block commit in chain order** and **gap split / in-batch dedup**
-  have no dedicated tests yet; currently covered indirectly by
-  `ContinuesPastKnownBlock` + single-block retry above — dedicated cases recommended.
-
-**sync layer** (PR2 / PR3)
-
-- minor sync finds the ancestor via committed / body-only anchor → `TestMinorFindAncestorUsesCommittedOrBodyWithoutState`
-- root / minor task mocks explicitly distinguish `HasBlock` from `HasCommittedBlock` (test scaffolding, not a standalone assertion).
-
-Suggested local runs:
+- Cover core semantics: distinguish `HasBlock` / `HasCommittedBlock`, write commit marker only when body exists, and keep `InsertChain` from writing marker automatically.
+- Cover shard commit flow: write marker after broadcast / report succeeds, and recover blocks that have body/state but miss marker through retry.
+- Cover sync semantics: `HasBodyWithoutState` can serve as ancestor local data, but cannot be treated as committed.
 
 ```bash
 go test ./core/... ./cluster/sync/... ./cluster/shard/...
+```
+
+**Race test**
+
+- Focus on the key concurrent invariant: `commit marker present => body present`.
+- Cover `AddMinorBlock` / `AddBlockListForSync` racing with `SetHead`.
+
+```bash
 go test -race ./cluster/shard -run 'TestAddBlockListForSyncMarkerBodyConsistencyUnderRace|TestAddMinorBlockMarkerBodyConsistencyUnderRace'
 ```
 
-## Non-goals
+**Run nodes**
 
-- **Read-side atomicity**: PR1 only converged the write-side publication order.
-  On the read side, `CurrentBlock()` / `GetBlockByNumber()` don't take `m.mu`, so
-  during the window where a root reorg has rewritten the canonical index but the
-  new head isn't published yet, they can still read an inconsistent snapshot of
-  "old head + new canonical index." Making read tip / state observe the same lock
-  is follow-up work, tracked in [#693](https://github.com/QuarkChain/goquarkchain/issues/693).
-- **No strong "succeed-once" guarantee; converge by retry**: we don't change the
-  resend/dedup mechanism of x-shard broadcast / master report (the same block may
-  be resent multiple times; the receiver dedups by block hash and won't process
-  it twice), nor do we wrap history recovery in a single transaction; on failure a
-  block stays uncommitted and is filled in on a later retry via the existing
-  "dedup by block hash + sync retry."
+- Start local cluster nodes and confirm they can start, sync, and keep advancing root blocks.
+- Keep the nodes running for a while and watch for `ErrBodyDeleted`, missing parent, missing state, or commit marker related errors. If they appear, they should recover through sync retry instead of stopping sync.
+- Restart the cluster on existing chain data and confirm it restores head from the DB, then continues syncing and mining.
 
-## PR overview
+## Non-Goals
 
-- PR 1: `fix/minor-chain-head-locking` (commits `f1f0f50`, `f40beb8`) — serialize concurrency, atomic head publication
-- PR 2: `fix/minor-block-commit-status` (commits `3ea16ad`, `79d7f18`) — split "body present" from "committed"
-- PR 3: `fix/minor-sidechain-body-anchor` (commits `d887d70`, `fad5e1b`) — sidechain body anchor and retry recovery
-
-The consensus we want after reading: the difference between the three states
-(body / state / commit marker); why locking must come first, then the marker
-semantics split, then the sidechain body anchor; and what to focus on in each PR
-and which risks the tests cover.
+- **Read-side atomicity**: PR1 only changes write-side publication order. Read-side `CurrentBlock()` /
+  `GetBlockByNumber()` does not take `m.mu`, so while root reorg has rewritten canonical index but not yet
+  published the new head, readers may still observe "old head + new canonical index". Making read tip / state
+  use the same lock is follow-up work, tracked in [#693](https://github.com/QuarkChain/goquarkchain/issues/693).
