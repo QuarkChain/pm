@@ -6,6 +6,12 @@ Add QuarkChain's basic type layer under `qkc/types`: hash/RLP helpers, token bal
 
 This series only adds standalone QKC types and byte-compatible encoding/hash behavior. It does not wire these types into `core/state`, `core/types`, EVM execution, block import, or P2P/RPC.
 
+## Scope
+
+In scope: standalone QKC wire/type definitions for hashes, token balances, logs, receipts, transactions, and root/minor blocks. The transaction PR adds transaction encoding, hashing, signing, and sender recovery as type-level behavior only.
+
+Out of scope: using these types in execution, state transition, account storage, block import, P2P/RPC, snapshot/pathdb/history, or MNT account integration.
+
 ## Boundary
 
 `qkc/types` may depend on geth's general utilities such as `common`, `crypto`, `rlp`, `trie`, and isolated base types. Geth core packages should not depend on `qkc/types` in this series.
