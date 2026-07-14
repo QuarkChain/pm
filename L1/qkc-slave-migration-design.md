@@ -35,15 +35,15 @@ This phase does not implement business logic, such as:
 
 ## 3. Current Status
 
-| PR  | Content                                    | Status      |
-|-----|--------------------------------------------|-------------|
-| PR1 | Wire Frame encoding/decoding               | ✅ Completed |
-| PR2 | Metadata and Opcode definitions            | ✅ Completed |
-| PR3 | Message definitions and protocol constants | Review      |
-| PR4 | RpcConn + XshardConn foundation            | Review      |
-| PR5 | MasterConn, handler registration           | Review      |
-| PR6 | PeerConn, Dispatcher, and peer routing     | Planned     |
-| PR7 | Slave runtime and lifecycle management     | Planned     |
+| PR  | Content                                              | Status      |
+|-----|------------------------------------------------------|-------------|
+| PR1 | Wire Frame encoding/decoding                         | ✅ Completed |
+| PR2 | Metadata and Opcode definitions                      | ✅ Completed |
+| PR3 | Message definitions and protocol constants           | Review      |
+| PR4 | RpcConn + XshardConn foundation                      | Review      |
+| PR5 | MasterConn, handler registration                     | Review      |
+| PR6 | PeerConn, Dispatcher, and peer routing               | Planned     |
+| PR7 | Slave communication runtime and lifecycle management | Planned     |
 
 ## 4. Communication Flow
 
@@ -171,21 +171,22 @@ Main contents:
 - PeerConn does not own a TCP socket and uses MasterConn as its transport.
 - PeerConn is an independent RPC channel with its own RPC ID namespace.
 - PeerConn lifecycle is controlled by Master commands.
-- Dispatcher: routes frames to the correct PeerConn based on `cluster_peer_id` (`cluster_peer_id == 0` routes to MasterConn
-  itself)
+- Dispatcher: routes frames to the correct PeerConn based on `cluster_peer_id` (`cluster_peer_id == 0` routes to
+  MasterConn itself)
 - Peer Handler registration and dispatch framework
 - Stub implementations for Handlers depending on business components
 
-### PR7: Slave Runtime
+### PR7: Slave Communication Runtime
 
 Corresponds to Python: `SlaveServer`
 
 Main contents:
 
-- Slave lifecycle management + TCP listener
+- Slave communication service lifecycle management
+- TCP listener for cluster connections
 - Unified connection management (MasterConn / PeerConn / XshardConn)
 - Dispatcher orchestration
-- Wiring of all components
+- Wiring of communication components
 
 ## 6. Handler Implementation Strategy
 
