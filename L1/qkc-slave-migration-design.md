@@ -98,6 +98,34 @@ QuarkChain cluster communication consists of three communication paths:
             │  op + rpc_id + payload         │
 ```
 
+### 4.4 Connection Model Rules
+
+**Connection Identity**
+
+| Connection Type | Description                                                                             |
+|-----------------|-----------------------------------------------------------------------------------------|
+| MasterConn      | Connection used for Master-Slave communication                                          |
+| XshardConn      | Connection used for Slave-Slave communication                                           |
+| PeerConn        | Virtual connection representing forwarded peer traffic, identified by `cluster_peer_id` |
+
+**RPC Isolation**
+
+- Each logical connection is an independent RPC channel.
+- RPC IDs are scoped per connection and are not required to be globally unique.
+- Multiple PeerConn instances sharing the same MasterConn transport may use overlapping RPC IDs.
+
+**Lifecycle**
+
+- PeerConn lifecycle is driven by Master commands, never autonomously by the Slave
+- Closing MasterConn closes all associated PeerConn instances.
+
+**Message Routing**
+
+MasterConn routes frames based on `cluster_peer_id`:
+
+- `cluster_peer_id == 0`: Master RPC, handled locally by MasterConn
+- `cluster_peer_id != 0`: Peer RPC, forwarded by the Dispatcher to the corresponding PeerConn
+
 ## 5. Migration Plan
 
 ```
@@ -119,7 +147,7 @@ Corresponding Python components: `Connection`, `SlaveConnection`
 Main contents:
 
 - RpcConn: connection framework (TCP read/write loops, RPC ID management, request/response matching)
-- XshardConn: Slave-to-Slave TCP connections (0B Metadata)
+- XshardConn: Slave-to-Slave communication
 - Xshard handler registration and Ping/Pong handshake
 
 ### PR5: MasterConn
@@ -128,9 +156,8 @@ Corresponds to Python: `MasterConnection`
 
 Main contents:
 
-- Master-Slave TCP connection
-- ClusterMetadata handling (12B)
-- MasterConn lifecycle
+- Master-Slave communication
+- MasterConn serves as the transport channel for forwarded peer traffic
 - Master Handler registration and dispatch framework
 - Stub implementations for Handlers depending on business components
 
@@ -140,8 +167,12 @@ Corresponds to Python: `PeerShardConnection`, `VirtualConnection`
 
 Main contents:
 
-- Peer virtual connection + forwarding mechanism
-- Dispatcher message routing
+- PeerConn: virtual connection for forwarded external peer traffic.
+- PeerConn does not own a TCP socket and uses MasterConn as its transport.
+- PeerConn is an independent RPC channel with its own RPC ID namespace.
+- PeerConn lifecycle is controlled by Master commands.
+- Dispatcher: routes frames to the correct PeerConn based on `cluster_peer_id` (`cluster_peer_id == 0` routes to MasterConn
+  itself)
 - Peer Handler registration and dispatch framework
 - Stub implementations for Handlers depending on business components
 
