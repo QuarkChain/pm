@@ -58,29 +58,25 @@ All three PRs are split out from the original large branch and are stacked: PR3 
 
 ### PR 1 · `fix/minor-chain-head-locking`
 
-**Theme**: serialize minor head rewind and root reorg, and publish head-related fields together.
+**Theme**: serialize minor head rewind and root reorg, and avoid conflicts with import / commit.
 This PR does not change commit marker semantics.
 
 Issue / impact:
 
 - `SetHead` / root reorg can conflict with minor block import / commit, so a body may be deleted while still being committed or referenced.
-- During root reorg, head, root tip, EVM state, and canonical index are published in separate steps; other code can observe inconsistent state.
 
 Root cause:
 
 - rewind / root reorg / import were not fully serialized by the same set of locks.
-- head-related fields were written step by step instead of computing the target first and publishing together.
 
 Fix:
 
 - Use the lock order `s.mu -> chainmu -> mu`, so rewind / root reorg / import are mutually exclusive.
 - `setHead` validates the target state first, then deletes bodies, then publishes head/state together.
-- root reorg publishes root tip, confirmed tip, EVM state, and head together at the end; the no-head-publish path only rewrites canonical hash and does not delete sidechain bodies.
 
 Review focus:
 
 - Any reverse lock order or re-entrant deadlock?
-- Are head, root tip, EVM state, and canonical index published under the same lock acquisition?
 - If rewind returns an error, can it return after deleting bodies?
 
 ### PR 2 · `fix/minor-block-commit-status`
@@ -202,7 +198,7 @@ go test -race ./cluster/shard -run 'TestAddBlockListForSyncMarkerBodyConsistency
 
 ## Non-Goals
 
-- **Read-side atomicity**: PR1 only changes write-side publication order. Read-side `CurrentBlock()` /
-  `GetBlockByNumber()` does not take `m.mu`, so while root reorg has rewritten canonical index but not yet
-  published the new head, readers may still observe "old head + new canonical index". Making read tip / state
-  use the same lock is follow-up work, tracked in [#693](https://github.com/QuarkChain/goquarkchain/issues/693).
+- **Read-side atomicity**: this is not part of PR1; it is the follow-up tracked in
+  [#693](https://github.com/QuarkChain/goquarkchain/issues/693). The issue is that during root reorg / genesis reset,
+  `CurrentBlock()`, `GetBlockByNumber()`, and `State()` can observe different head / canonical-index / state snapshots.
+  That mixed-snapshot problem needs a separate fix.

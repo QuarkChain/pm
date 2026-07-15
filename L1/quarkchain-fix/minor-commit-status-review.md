@@ -21,7 +21,6 @@
 
 - crash / restart 后分不清「已提交」还是「只写入了本地 body」。
 - head rewind 可能删 body，同时另一条路径写 marker，最后 DB 里有 marker，但对应 body 已经没了。
-- root reorg 分几步更新 head/rootTip/currentEvmState，其他代码可能看到互相对不上的状态。
 
 ## 拆分顺序
 
@@ -29,8 +28,7 @@
 
 1. **先解决并发问题**（PR1）。后面会把 commit marker 的写入从 body 保存之后延后到 xshard 广播 / 上报之后，
    这会让“body 已经写入 DB、marker 还没写”的时间变长，冲突可能性增大。因此在改 marker 语义前，必须先保证 
-   rewind / root reorg 不会在这段时间里和 import / commit 冲突：PR1 把这些路径放到同一组锁下串行，
-   并在同一次加锁里一起发布 currentBlock / rootTip / currentEvmState / canonical index。
+   rewind / root reorg 不会在这段时间里和 import / commit 冲突：PR1 把这些路径放到同一组锁下串行。
 2. **再把状态语义拆开**（PR2）。有了 PR1 的锁和发布顺序，PR2 才能安全地让
    body 存在 ≠ 已提交，并把 marker 改为由 shard 层在广播 / 上报成功后主动写入。这样
    `CommitMinorBlockByHash` 才能先确认 body 还在，再写 marker，保证 `marker => body`。
@@ -39,7 +37,7 @@
    只有 pruned sidechain 这种 `HasBodyWithoutState` 才能只靠 body 当作本地已有。基于这个语义，
    PR3 才能避免重复下载已有历史 body，并恢复那些「有 body 缺 marker」的历史块。
 
-这样拆以后，每个 PR 的 review 范围都比较单纯：PR1 只看锁和 head 发布，PR2 只看 body/marker 语义和
+这样拆以后，每个 PR 的 review 范围都比较单纯：PR1 只看锁，PR2 只看 body/marker 语义和
 `marker => body`，PR3 只看 sidechain 已有 body 复用 / replay 恢复；reviewer 不需要在一个巨大 diff
 里同时验证三类问题。
 
@@ -57,30 +55,25 @@
 
 ### PR 1 · `fix/minor-chain-head-locking`
 
-**主题**：串行化 minor head rewind 和 root reorg，保证 head 相关字段一起发布。本 PR 不碰 commit marker 语义。
+**主题**：串行化 minor head rewind 和 root reorg，避免它们和 import / commit 互相冲突。本 PR 不碰 commit marker 语义。
 
 Issue / impact：
 
 - `SetHead` / root reorg 可能和 minor block import / commit 并发冲突，导致 body 被删后仍被提交或引用。
-- root reorg 过程中 head、root tip、EVM state、canonical index 分步发布，其他代码可能看到不一致状态。
-- 并发 rewind 时，marker 可能写到已经被删除 body 的块上。
 
 Root cause：
 
 - rewind / root reorg / import 没有被同一组锁完整串行化。
-- head 相关字段逐步写入，而不是先算出目标，再一起发布。
 
 Fix：
 
 - 统一锁顺序为 `s.mu -> chainmu -> mu`，让 rewind / root reorg / import 互斥。
 - `setHead` 先校验目标 state，再删除 body，最后一次性发布 head/state。
-- root reorg 只在末尾一起发布 root tip、confirmed tip、EVM state 和 head；no-head-publish 路径只改 canonical hash，不删 sidechain body。
 
 Review focus：
 
 - 是否存在反向锁顺序或重入死锁。
-- head、root tip、EVM state、canonical index 是否在同一次加锁里发布。
-- rewind 出错时是否不会删除部分数据出现不可逆的中间态。
+- rewind 出错时是否不会先删 body 再返回。
 
 ### PR 2 · `fix/minor-block-commit-status`
 
@@ -88,7 +81,9 @@ Review focus：
 
 Issue / impact：
 
+- DB 里已经有 body/state，不代表 x-shard broadcast 和 master header 上报已经完成。
 - 旧代码把 body 存在和已提交混在一起，crash / 重试后无法判断哪些块需要补上提交。
+- 并发 rewind 时，marker 可能写到已经被删除 body 的块上。
 
 Root cause：
 
@@ -196,6 +191,6 @@ go test -race ./cluster/shard -run 'TestAddBlockListForSyncMarkerBodyConsistency
 
 ## 非目标
 
-- **读侧原子性**：PR1 只调整了写侧发布顺序。读侧的 `CurrentBlock()` / `GetBlockByNumber()` 不走 `m.mu`，
-  在 root reorg 重写 canonical 索引、还没发布新 head 的过程中，仍可能读到「旧 head + 新 canonical 索引」的
-  不一致状态。让 read tip / state 走同一把锁是后续工作，留到 [#693](https://github.com/QuarkChain/goquarkchain/issues/693)。
+- **读侧原子性**：这不是 PR1 要修的内容，而是 issue [#693](https://github.com/QuarkChain/goquarkchain/issues/693) 要跟的后续问题。
+  具体是 root reorg / genesis reset 时，`CurrentBlock()`、`GetBlockByNumber()`、`State()` 可能看到不同步的 head / canonical index / state。
+  这类“混合快照”需要单独处理，不在本 PR 范围内。
