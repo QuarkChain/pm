@@ -63,6 +63,7 @@ Issue / impact：
 
 - `SetHead` / root reorg 可能和 minor block import / commit 并发冲突，导致 body 被删后仍被提交或引用。
 - root reorg 过程中 head、root tip、EVM state、canonical index 分步发布，其他代码可能看到不一致状态。
+- 并发 rewind 时，marker 可能写到已经被删除 body 的块上。
 
 Root cause：
 
@@ -79,7 +80,7 @@ Review focus：
 
 - 是否存在反向锁顺序或重入死锁。
 - head、root tip、EVM state、canonical index 是否在同一次加锁里发布。
-- rewind 出错时是否不会先删 body 再返回。
+- rewind 出错时是否不会删除部分数据出现不可逆的中间态。
 
 ### PR 2 · `fix/minor-block-commit-status`
 
@@ -87,9 +88,7 @@ Review focus：
 
 Issue / impact：
 
-- DB 里已经有 body/state，不代表 x-shard broadcast 和 master header 上报已经完成。
 - 旧代码把 body 存在和已提交混在一起，crash / 重试后无法判断哪些块需要补上提交。
-- 并发 rewind 时，marker 可能写到已经被删除 body 的块上。
 
 Root cause：
 
