@@ -34,31 +34,32 @@ They should not be blindly merged by making `qkc/types` depend on `core/types`. 
 ## PR split
 
 All PRs are stacked; each one is based on the previous one.
+Each PR should be reviewable on its own: why it is needed and what later PR depends on it.
 
 1. `qkc-3-types-01-hash-utils`
    - Title: `qkc/types: add hash and rlp helpers`
-   - Adds `DeriveSha`, `CalculateMerkleRoot`, `serHash`, and QKC `Uint32` RLP.
-   - Review focus: pyquarkchain-compatible bytes/hash behavior.
+   - Why needed: later receipts, transactions, and blocks all need pyquarkchain-compatible hash/RLP helpers before their golden-vector tests can be meaningful.
+   - Adds: `DeriveSha`, `CalculateMerkleRoot`, `serHash`, and QKC `Uint32` RLP.
 
 2. `qkc-3-types-02-token-balances`
    - Title: `qkc/types: add token balances`
-   - Adds QKC token balance container and encoding for block/header usage.
-   - Review focus: list/trie encoding semantics, copy behavior, and boundary with MNT account-state types.
+   - Why needed: QKC block/header wire types reference token balance bytes, especially `CoinbaseAmount`, but this PR does not model account-state storage.
+   - Adds: QKC token balance container and encoding for block/header usage.
 
 3. `qkc-3-types-03-logs-receipts`
    - Title: `qkc/types: add logs and receipts`
-   - Adds QKC logs, receipts, bloom, and receipt storage/wire encoding.
-   - Review focus: receipt status/post-state encoding and `DeriveSha(Receipts)` compatibility.
+   - Why needed: minor blocks need receipt/log wire encoding, receipt roots, and header bloom values before block types can be verified.
+   - Adds: QKC logs, receipts, bloom integration, and receipt storage/wire encoding.
 
 4. `qkc-3-types-04-transactions`
    - Title: `qkc/types: add transactions and signing`
-   - Adds EVM transactions, cross-shard transactions, signing, and ABI helpers.
-   - Review focus: shard fields, token IDs, tx hash/signing compatibility.
+   - Why needed: minor blocks contain QKC transactions, and block hash/root tests need transaction encoding, hashing, signing, and sender recovery to match pyquarkchain.
+   - Adds: EVM transactions, cross-shard transactions, signing, and ABI helpers.
 
 5. `qkc-3-types-05-blocks`
    - Title: `qkc/types: add root and minor blocks`
-   - Adds root/minor block headers, metadata, blocks, copy/hash helpers.
-   - Review focus: block serialization/hash and composition of tx/receipt roots.
+   - Why needed: this is the first PR that composes the earlier standalone types into QKC root/minor block headers and block bodies.
+   - Adds: root/minor block headers, metadata, blocks, copy/hash helpers.
 
 ## Testing
 
