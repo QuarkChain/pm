@@ -50,13 +50,13 @@ qkc/core    ← newly written, Validate / ApplyTransaction / ApplyXShardDeposit 
 
 Conceptual public entry points: `ValidateTransaction` / `ValidateTxForBlock` / `ApplyTransaction` / `ApplyXShardDeposit` / `RunOneXShardTx` / `RunCrossShardTxWithCursor` / `Process` / `ValidateBlockResult`, plus an atomic `ExecuteAndValidate` (internally `Process` + comparison, returning an error if any item mismatches, so callers can never get hold of a StateDB that has been committed but is already invalid). `ValidateBlockResult` is a separate function so replay can call it directly.
 
-Cross-shard data is fed in through an `XShardSource` interface. **It needs root block bodies (including the minor header list), and `qkc/types/rootblock.go` currently only has `RootBlockHeader`** — adding that type is a prerequisite and can be done in parallel with this plan. The real implementation (database reads/writes) belongs to the chain-layer task; the interface shape needs to be aligned with the owner of issue #1.
+Cross-shard data is fed in through an `XShardSource` interface. **It needs root block bodies (including the minor header list), and `qkc/types/rootblock.go` currently only has `RootBlockHeader`** — adding that type is a prerequisite for the block-tier vectors and S7, and is being done in parallel with this plan. The code already exists on the `qkc-3-types-05-blocks` branch (https://github.com/QuarkChain/goshard/pull/36); it has to be merged before S7. The real implementation (database reads/writes) belongs to the chain-layer task; the interface shape needs to be aligned with the owner of issue #1.
 
 The two validation layers are not a simple "validate then execute" sequence: `ApplyTransaction` calls `validate_transaction` **a second time** internally, while `ValidateTxForBlock` inside `run_block` returns early in the future-nonce range and skips it. Implementing this as "validate once" would behave differently on future-nonce transactions.
 
 ## Step-by-step implementation
 
-### S0 — golden generator
+### S0 — golden generator — **state and message tiers landed; block tier blocked**
 Export three tiers of vectors — state level, message level, block level — from a pyquarkchain venv. The first case is fixed as a no-op genesis ALLOC whose post root must equal the two-network values in `minor_genesis_golden.json`, which calibrates the generator itself.
 
 ### S1 — qkc/state mutable state layer
@@ -87,7 +87,7 @@ Layers 2 and 3 of the verification plan, as a step of their own: port the behavi
 
 | Step | Acceptance |
 |---|---|
-| S0 | No-op genesis case, post root matches the golden for both networks |
+| S0 | No-op genesis case, post root matches the golden for both networks — **met** (block tier still pending the root block body) |
 | S1 | ALLOC for both networks read back unchanged with matching commit; state-level golden compared per case on post root; snapshot/revert round trip |
 | S2 | Compiles standalone; the Petersburg-and-earlier subset of geth's EVM unit tests passes |
 | S3 | Transfer cases (nonce, balance, gas, block cap, network id, branch, each v2 failure) compared on root + receipt + `gas_used` + coinbase |
@@ -150,4 +150,4 @@ The replayable range is not "whatever is left once this is done" — it is fixed
   **Not a consensus issue** — the root is fixed at `trie.Hash()` and this code is only local GC bookkeeping, so a wrong decoder surfaces as a local `missing trie node`, never as a different root. The price is losing reference counting on this path; getting it back needs no geth change (the APIs are public, same shape as goquarkchain's onleaf callback). goshard runs on hashdb only (`triedb.HashDefaults`); **pathdb is neither used nor planned** — switching would need its own assessment, since it decodes accounts in three subsystems that sit on the read/rollback path.
 - **Long-term cost of copying core/vm**: once the copy lands it diverges from upstream, and upstream security fixes will have to be tracked manually.
 - **Legacy fork behavior in geth v1.17**: all fork-gated code is in principle still there, but 2018-era pyethereum and 2026-era geth may differ historically on pre-Constantinople corners (EXP pricing, empty-account touching, CALL depth/balance check ordering). Layer 3 differential testing exists exactly for this; don't expect to enumerate them by reading code.
-- **Version compatibility of `CrossShardTransactionList`**: pyquarkchain has three versions with automatic upgrade, while `qkc/types` currently only recognizes V0. This must be filled in before reading old databases; it belongs to `qkc/types` and can be done in parallel.
+- **Version compatibility of `CrossShardTransactionList`**: pyquarkchain has three versions with automatic upgrade, while `qkc/types` currently only recognizes V1 (the other two are rejected outright). This must be filled in before reading old databases; it belongs to `qkc/types` and can be done in parallel.
