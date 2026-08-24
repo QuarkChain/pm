@@ -93,13 +93,13 @@ What holds it together is four seams: one facing callers, two carrying data in, 
 
 **Everything downstream is checked against pyquarkchain's own output, so the oracle is built before any of it.** A generator exports three tiers of vectors — state level, message level, block level — from a pyquarkchain venv, against a pinned oracle commit. What it has to emit is set by the [Hard-fork switches](#hard-fork-switches) table. Every switch that branches the execution layer needs vectors on both sides, and no single network reaches both — which is why every tier is emitted twice, for mainnet and for devnet.
 
-**Acceptance**: provenance (commit + module digest) is written to disk alongside the vectors. The post root of the no-op genesis ALLOC — the genesis allocation table, the addresses and starting balances a shard's genesis state is built from — must match the minor genesis values already committed for both networks. That match is what calibrates the generator.
+**Acceptance**: provenance (commit + module digest) is written to disk alongside the vectors. The generator is calibrated by requiring the post-state root of the no-op genesis ALLOC to match the minor genesis values already committed for both networks. Here, ALLOC is the genesis allocation table containing the addresses and starting balances from which a shard's genesis state is built.
 
 ### S1 — mutable state layer
 
-**The account model diverges below the point where any execution logic starts, so the state layer is rebuilt first and everything else sits on it.** Six-field account leaves, balances indexed by token id, the full shard key in the leaf, and existence and deletion rules that follow pyquarkchain's, not geth's — all extending geth's `core/state`, with the QKC side kept in separate files. Above them, a wrapper presents the result in the shape of pyquarkchain's `State`: block context, two receipt lists, one commit per block written through to disk, and snapshots that roll back the context along with the state.
+**The account model diverges below the point where any execution logic starts, so the state layer is rebuilt first and everything else sits on it.** A wrapper presents the result in the shape of pyquarkchain's `State`: block context, two receipt lists, one commit per block written through to disk, and snapshots that roll back the context along with the state.
 
-**Acceptance**: the genesis ALLOC for both networks written, committed, and read back field for field unchanged, with the commit root matching S0's golden; state-level golden compared per case on post root; snapshot/revert round trip.
+**Acceptance**: the genesis ALLOC for both networks is written through the new account layer and read back field for field unchanged, with S0's golden root serving as the anchor; the post-state root is compared against the state-level golden for each case; snapshot/revert completes a round trip.
 
 ### S2 — the QKC profile in core/vm
 
@@ -117,7 +117,7 @@ What holds it together is four seams: one facing callers, two carrying data in, 
 
 **With admission in place, the transaction is handed to the EVM and the S2 profile starts doing real work.** Assemble `BlockContext` / `TxContext` / message and hook up that profile, feeding in `full_shard_key` for the address derivation to use.
 
-**Acceptance**: contract cases (deploy, call, revert, OOG, SELFDESTRUCT, CREATE2, nesting, logs/bloom).
+**Acceptance**: contract cases (deploy, call, revert, OOG, SELFDESTRUCT, CREATE2, nesting, logs/bloom), plus the six S0 vectors for the corners where a 2018 pyethereum fork and a 2026 geth can disagree — `sstore_legacy_pricing`, two `returndatacopy_*`, three `create_*`.
 
 ### S5 — cross-shard source side
 
@@ -127,7 +127,7 @@ What holds it together is four seams: one facing callers, two carrying data in, 
 
 ### S6 — cross-shard target side
 
-**The other half runs on the receiving shard, one deposit at a time.** `RunOneXShardTx` is **two mutually exclusive paths**: pre-EVM credits the money directly to `to`, executes no code, and produces no deposit receipt; only post-EVM goes through `ApplyXShardDeposit`.
+**The other half runs on the receiving shard, one deposit at a time.** `RunOneXShardTx` is **two mutually exclusive paths**, chosen by whether the block's timestamp has passed `ENABLE_EVM_TIMESTAMP`: pre-EVM credits the money directly to `to`, executes no code, and produces no deposit receipt; only post-EVM goes through `ApplyXShardDeposit`.
 
 **Acceptance**: must include three items — post-EVM failure leaving funds stranded, pre-EVM crediting an account with code directly, and the `ENABLE_EVM_TIMESTAMP` ±1 boundary.
 
@@ -135,7 +135,7 @@ What holds it together is four seams: one facing callers, two carrying data in, 
 
 **Everything above gets lifted to a whole block: which deposits it may consume, in what order they run, and how the block settles.** The three-level cursor traversal (root block height / minor block index / deposit index) and its skip rules; cross-shard receiving **must be ordered before regular transactions** (part of consensus); coinbase is the sum of the block reward and fees, split per token.
 
-**Acceptance**: block-level golden — the genesis root derived from the genesis ALLOC alone, then the seven result items compared block by block, plus the deposits consumed/produced and account read-back; and the cut-and-resume of a single root block's deposit list spanning two minor blocks.
+**Acceptance**: block-level golden — derive the genesis root, compare the seven result items block by block, check the deposits consumed and produced and the account read-back, and cut and resume a single root block's deposit list across two minor blocks.
 
 ### S8 — ported tests
 
@@ -151,13 +151,13 @@ The question that matters is not "when did this go live" but "which branch does 
 |---|---|---|---|
 | `ENABLE_TX_TIMESTAMP` + `TX_WHITELIST_SENDERS` | 2019-06-29 | **0** | Before this, only whitelisted addresses could send transactions; devnet has no such phase |
 | `ENABLE_EVM_TIMESTAMP` | 2019-09-27 | **0** | **Five places in scope**: three differences in cross-shard gas settlement, contract transactions forbidden before it, and whether cross-shard receiving takes the pre-EVM fixed-amount path or the EVM path. **It splits mainnet in two, so both sides need golden cases**; devnet is post-EVM throughout |
-| shard `POSW_CONFIG.ENABLE_TIMESTAMP` | chains 1–7 **in effect from genesis**, chain 0 off | same | Whether the disallow map is non-empty — the one switch whose absence is silent |
-| `XSHARD_GAS_DDOS_FIX_ROOT_HEIGHT` | root height 90000 | same | The basis for determining starting gas on the target side |
-| `configure_special_contract_ts` | **per precompile** | same | A strict `>`, unlike the `<` used elsewhere — easy to get backwards. Honored by the dependency precompiles, not by this layer |
+| shard `POSW_CONFIG.ENABLE_TIMESTAMP` | chains 1–7 **in effect from genesis**, chain 0 off | same as mainnet | Whether the disallow map is non-empty — the one switch whose absence is silent |
+| `XSHARD_GAS_DDOS_FIX_ROOT_HEIGHT` | root height 90000 | same as mainnet | The basis for determining starting gas on the target side |
+| `configure_special_contract_ts` | **per precompile** | same as mainnet | A strict `>`, unlike the `<` used elsewhere — easy to get backwards. Honored by the dependency precompiles, not by this layer |
 | `ENABLE_NON_RESERVED_NATIVE_TOKEN_TIMESTAMP` / `ENABLE_GENERAL_NATIVE_TOKEN_TIMESTAMP` | **2020-05-01** | **0** | Out of scope. Marks where MNT becomes reachable and therefore where the sentinel starts firing |
 | `ENABLE_EIP155_SIGNER_TIMESTAMP` | 2021-09-14 | **0** | The `version == 2` guard branch in `validate_transaction` |
 
-Every chain-level timestamp switch that gates this layer is 0 on devnet: post-EVM throughout, EIP155 from block 1. That is why the devnet column earns its place even though mainnet is the eventual consensus target — on mainnet the `version == 2` branch does not appear until 2021-09-14, long after the sentinel has taken over, so **devnet is the only cheap way to exercise it**. S0 emits both networks for that reason.
+**Devnet is the only network in scope on which the `version == 2` branch is reachable**: on mainnet, it was disabled until 2021-09-14.
 
 ## Verification plan
 
@@ -165,7 +165,9 @@ Two layers in scope, cheapest first, plus the one that finally settles it.
 
 1. **Golden vectors** — the output of S0, asserted field by field in table-driven Go tests; this is what the per-step "Acceptance" above actually runs, across all three tiers.
 2. **Porting pyquarkchain's shard state tests** — S8: `test_shard_state.py` is a ready-made behavior checklist. Every ported case is mutation-tested — revert the corresponding implementation to the wrong version and the case must turn red, otherwise it is not testing anything.
-3. **Historical replay** — out of scope here, landing with the chain-layer task. Worth naming for what it cannot do: replay only runs canonical blocks, so it only ever verifies the "what should pass does pass" half. Rules that take effect on the rejection path depend on the two layers above no matter how much history gets replayed.
+3. **Historical replay (out of scope)** — this will land with the chain-layer task.
+   - **What it cannot do**: replay only runs canonical blocks, so it only ever verifies the "what should pass does pass" half. Rules that take effect on the rejection path depend on the two layers above no matter how much history gets replayed.
+   - **What only it can do**: catch a pre-Constantinople gas divergence between 2018-era pyethereum and 2026-era geth that nobody thought to name. Hand-enumerated vectors cannot reach a corner nobody named, and replay sees the bytecode the chain actually ran.
 
 ## Dependencies
 
@@ -178,8 +180,5 @@ This design builds none of the following, and a change in any of them lands dire
 
 ## Risks and considerations
 
-Ordered by severity: unresolved divergences first, deliberate boundaries last.
-
-- **Legacy fork behavior in geth v1.17**: 2018-era pyethereum and 2026-era geth may differ historically on pre-Constantinople corners. A pass over the static layer — opcode table, constant gas, precompile pricing and set — turned up nothing; the dynamic layer — SSTORE's four Petersburg tiers, RETURNDATACOPY's out-of-bounds check, CREATE's handling of init code failure — has not been gone through case by case.
 - **Deferring MNT is not free**: the MNT branches thread through `ApplyTransaction`, `validate_transaction` and the deposit path. Bringing them back later means reopening the same three functions and re-validating them against the same golden vectors, and reconstituting the pinned pyquarkchain oracle to generate the new cases.
 - **pathdb not adapted**: pathdb mixes the slim and full account formats in three places — snapshot generation, state rollback, and account reads. The two formats are inter-derivable in stock geth, but stop being so once the QKC leaf changes the contents. goshard runs hashdb only and the execution path never touches pathdb, so this design is unaffected; enabling pathdb later needs its own assessment, because all three sit on read and rollback paths and so fail by silently returning a wrong account rather than loudly the way the profile boundary does.
