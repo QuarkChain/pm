@@ -29,18 +29,18 @@ This review covers the QuarkChain node changes since the SlowMist review and the
 
 | Component | Review target | Reference and role |
 |---|---|---|
-| QuarkChain node changes | Source, Ethash, and dependencies | All source changes after the SlowMist-audited commit [`c5bad53122654bd5677b84abfa4a11acb6bf94d5`](https://github.com/QuarkChain/pyquarkchain/commit/c5bad53122654bd5677b84abfa4a11acb6bf94d5) through the reviewed v1.7 commit [`8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9`](https://github.com/QuarkChain/pyquarkchain/commit/8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9). The review also covered the pinned [`QuarkChain/ethash@907b7d80`](https://github.com/QuarkChain/ethash/commit/907b7d8064d3be09536e754bbf469b442f2e213d) implementation and the dependency changes in [PR #994 at commit `39ad52e9`](https://github.com/QuarkChain/pyquarkchain/commit/39ad52e94f52518687161c423dc70289a8dd2c5e), including its [exact-version `requirements.txt`](https://github.com/QuarkChain/pyquarkchain/blob/39ad52e94f52518687161c423dc70289a8dd2c5e/requirements.txt). |
+| QuarkChain node changes | Source, Ethash, and dependencies | All source changes after the SlowMist-audited commit [`c5bad53122654bd5677b84abfa4a11acb6bf94d5`](https://github.com/QuarkChain/pyquarkchain/commit/c5bad53122654bd5677b84abfa4a11acb6bf94d5) through the planned v1.7 release commit [`8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9`](https://github.com/QuarkChain/pyquarkchain/commit/8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9). The review also covered the pinned [`QuarkChain/ethash@907b7d80`](https://github.com/QuarkChain/ethash/commit/907b7d8064d3be09536e754bbf469b442f2e213d) implementation and the dependency changes in [PR #994 at commit `39ad52e9`](https://github.com/QuarkChain/pyquarkchain/commit/39ad52e94f52518687161c423dc70289a8dd2c5e). |
 | QKC Token Contract | Deployment and verified source | [Ethereum `0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664`](https://etherscan.io/address/0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664#code). The review covered the source and deployed state. |
 
 ### 2.2 Review method
 
-Every commit between the SlowMist-audited version and the reviewed v1.7 version was classified by security impact. Security-sensitive changes received detailed review.
+Every commit between the SlowMist-audited version and the planned v1.7 release was classified by security impact. Security-sensitive changes received detailed review.
 
 Review depth followed potential impact. P1 covered consensus-sensitive changes. P2 covered node security and availability. P3 covered runtime, build, test, and operational tooling changes. Section 3 lists the review guide and results.
 
 The review used the following methods:
 
-- **Change analysis:** Compared the SlowMist-audited version with the reviewed v1.7 version and identified security-sensitive changes.
+- **Change analysis:** Compared the SlowMist-audited version with the planned v1.7 release and identified security-sensitive changes.
 - **Code review:** Manually reviewed the security-sensitive node changes and the QKC Token Contract, with Fable 5 assistance.
 - **Dependency review:** Scanned the declared Python dependencies with `pip-audit` and reviewed the results for project impact.
 - **Verification:** Reproduced findings, checked fixes and CI results, ran focused tests, tested public endpoints, and used v1.7 to replay mainnet from genesis.
@@ -84,9 +84,7 @@ The review followed the [v1.7 review guide](https://github.com/QuarkChain/pyquar
 
 ## 4. QKC Token Contract Review
 
-### 4.1 Deployment and controls
-
-The deployed state was observed on 2 September 2026.
+The Fable 5.1-assisted manual review covered the contract source and the deployed state observed on 2 September 2026. It identified no Critical, High, Medium, or Low vulnerability. It also identified no backdoor or hidden administrative path.
 
 | Property | Result |
 |---|---|
@@ -106,10 +104,6 @@ The custom code is limited to initial supply allocation, one-time crowdsale and 
 
 The contract has no `selfdestruct`, `delegatecall`, inline assembly, arbitrary external call, or `tx.origin` authorization. It also has no blacklist, transfer tax, fee, or transfer cap. The owner cannot change the total supply or move user balances.
 
-### 4.2 Source and deployed-state review
-
-The Fable 5.1-assisted manual review covered the full exact-match source and the deployed state observed on 2 September 2026. It found no Critical, High, or Medium vulnerability. It also found no backdoor or hidden administrative path.
-
 Solidity 0.4.24 has no built-in overflow checks. The contract uses `SafeMath` for the reviewed arithmetic. We found no exploitable unchecked arithmetic.
 
 Transfers to the zero address and the contract itself are rejected.
@@ -124,8 +118,8 @@ The following records support the review conclusions.
 |---|---|---|
 | [PR #978](https://github.com/QuarkChain/pyquarkchain/pull/978) review and CI | Manual and Fable 5-assisted review of [merge commit `f635479d`](https://github.com/QuarkChain/pyquarkchain/commit/f635479d08238b35c67d4da9e1eadd132be7d4b3). | 395 tests and four CI jobs passed. |
 | Ethash regression test (`QSR-N-01`) | Python 3.13.15; Ethash outputs, Python/`pyethash` consistency, and epoch 520. | **10 passed, 0 failed.** |
-| Public JSON-RPC testing | Tested representative endpoints against [v1.7 review snapshot `8ce6dc53`](https://github.com/QuarkChain/pyquarkchain/commit/8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9). | Availability and expected behavior verified. |
-| Mainnet replay | Replayed mainnet from genesis with [v1.7 review snapshot `8ce6dc53`](https://github.com/QuarkChain/pyquarkchain/commit/8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9). | Completed without a validation failure. |
+| Public JSON-RPC testing | Tested representative endpoints against the [planned v1.7 release commit `8ce6dc53`](https://github.com/QuarkChain/pyquarkchain/commit/8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9). | Availability and expected behavior verified. |
+| Mainnet replay | Replayed mainnet from genesis with the [planned v1.7 release commit `8ce6dc53`](https://github.com/QuarkChain/pyquarkchain/commit/8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9). | Completed without a validation failure. |
 | [PR #994](https://github.com/QuarkChain/pyquarkchain/pull/994) dependency scan | At [commit `39ad52e9`](https://github.com/QuarkChain/pyquarkchain/commit/39ad52e94f52518687161c423dc70289a8dd2c5e), used Python 3.13.15 and `pip-audit` 2.10.1: `pip-audit -r requirements.txt --no-deps --disable-pip --vulnerability-service pypi`. | `setuptools` was upgraded to 83.0.0 before the scan. Five advisories matched: four in `cryptography` and one in `ecdsa`. Review of the [cryptography](https://github.com/QuarkChain/pyquarkchain/pull/994#issuecomment-5505785257) and [ecdsa](https://github.com/QuarkChain/pyquarkchain/pull/994#issuecomment-5505852254) code paths found that none are reachable in pyquarkchain. No project-level vulnerability was identified. |
 | [QKC Token Contract](https://etherscan.io/address/0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664#code) | Reviewed the exact-match source and the state observed on 2 September 2026. Rechecked the owner Safe with Foundry `cast` 1.3.1. | No Critical, High, Medium, or Low issue. The owner is a Gnosis Safe 1.3.0 with an observed 2-of-3 threshold. |
 
@@ -158,7 +152,7 @@ The following records support the review conclusions.
 
 ### 7.1 Limitations
 
-- The node assessment covered changes from the SlowMist baseline to the v1.7 review snapshot. Unchanged node code was not re-audited line by line.
+- The node assessment covered changes from the SlowMist baseline to the planned v1.7 release commit. Unchanged node code was not re-audited line by line.
 - The QKC Token Contract state and node dependency advisory data were observed on 2 September 2026 and may change.
 
 ### 7.2 Conclusion
@@ -178,7 +172,7 @@ We found no unresolved vulnerability with Critical, High, or Medium impact on th
 - [Selected SlowMist baseline `c5bad531`](https://github.com/QuarkChain/pyquarkchain/commit/c5bad53122654bd5677b84abfa4a11acb6bf94d5)
 - [Python 3.13 and v1.7 upgrade — PR #978](https://github.com/QuarkChain/pyquarkchain/pull/978)
 - [Dependency pinning and review — PR #994](https://github.com/QuarkChain/pyquarkchain/pull/994)
-- [v1.7 review snapshot `8ce6dc53`](https://github.com/QuarkChain/pyquarkchain/commit/8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9)
+- [Planned v1.7 release commit `8ce6dc53`](https://github.com/QuarkChain/pyquarkchain/commit/8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9)
 - [v1.7 review guide](https://github.com/QuarkChain/pyquarkchain/blob/419b7c18bac55966fb9b96f59d8340b9158d3f40/docs/github-review-en.md)
 - [Pinned Ethash commit `907b7d80`](https://github.com/QuarkChain/ethash/commit/907b7d8064d3be09536e754bbf469b442f2e213d)
 
