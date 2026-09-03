@@ -5,14 +5,14 @@
 | Report version | v1.0 |
 | Report date | 2 September 2026 |
 | Prepared by | QuarkChain Engineering Team |
-| Scope | QuarkChain node changes since the SlowMist review, declared Python dependencies, and the active Ethereum QKC ERC-20 contract |
+| Scope | QuarkChain node changes since the SlowMist review and the Ethereum QKC ERC-20 contract ("QKC Token Contract") |
 | Result | **PASS** |
 
 ## 1. Executive Summary
 
 QuarkChain has undergone independent third-party security reviews. The [public audit archive](https://github.com/QuarkChain/audit-reports) contains reports from [Chaitin](https://github.com/QuarkChain/audit-reports/blob/master/quarkchain-chaitin.pdf) and [SlowMist](https://github.com/QuarkChain/audit-reports/blob/master/quarkchain-slow-mist.pdf). SlowMist gave the reviewed version a final result of **Passed**.
 
-This review covers the QuarkChain node and the [active Ethereum QKC ERC-20 contract (`0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664`)](https://etherscan.io/address/0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664#code). For the node, the review examined all code changes between the version reviewed by SlowMist and the planned v1.7 release. It also covered the declared Python dependencies. Changes with potential security impact received detailed review. The token review covered the verified source and current deployed state.
+This review covers the QuarkChain node changes since the SlowMist review and the [QKC Token Contract (`0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664`)](https://etherscan.io/address/0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664#code). The node review examined all changes through the planned v1.7 release. Changes with potential security impact received detailed review. For the QKC Token Contract, the review covered the verified source and current deployed state.
 
 **Overall result: PASS.** No Critical, High, or Medium vulnerability was identified. All five Low findings were resolved, and all three Informational findings were acknowledged.
 
@@ -20,9 +20,8 @@ This review covers the QuarkChain node and the [active Ethereum QKC ERC-20 contr
 
 | Component | Review work | Result |
 |---|---|---|
-| QuarkChain node — source changes | Reviewed all changes from the version reviewed by SlowMist to the planned v1.7 release. [PR #978](https://github.com/QuarkChain/pyquarkchain/pull/978) received the most detailed review. CI and targeted tests supported the result. | No unresolved Critical, High, or Medium issue. Five Low findings (`QSR-N-01` to `QSR-N-05`) were resolved. |
-| QuarkChain node — declared dependencies | Scanned the versions in [PR #994](https://github.com/QuarkChain/pyquarkchain/pull/994) with [`pip-audit`](https://github.com/pypa/pip-audit). Reviewed each result against the code paths used by pyquarkchain. | [Commit `39ad52e9`](https://github.com/QuarkChain/pyquarkchain/commit/39ad52e94f52518687161c423dc70289a8dd2c5e) matched five advisories: `cryptography` (4) and `ecdsa` (1). None of the affected paths are reachable in pyquarkchain. `setuptools` was upgraded to the fixed version. No project-level vulnerability was identified. |
-| Active Ethereum QKC ERC-20 | Reviewed the exact-match source and deployed state. | No Critical, High, Medium, or Low issue. Three Informational findings (`QSR-T-01` to `QSR-T-03`) are acknowledged. |
+| QuarkChain node changes | Reviewed all changes from the version reviewed by SlowMist to the planned v1.7 release. [PR #978](https://github.com/QuarkChain/pyquarkchain/pull/978) received the most detailed review. CI and targeted tests supported the result. | No unresolved Critical, High, or Medium issue. Five Low findings (`QSR-N-01` to `QSR-N-05`) were resolved. |
+| QKC Token Contract | Reviewed the exact-match source and deployed state. | No Critical, High, Medium, or Low issue. Three Informational findings (`QSR-T-01` to `QSR-T-03`) are acknowledged. |
 
 ## 2. Scope and Review Method
 
@@ -30,10 +29,8 @@ This review covers the QuarkChain node and the [active Ethereum QKC ERC-20 contr
 
 | Component | Review target | Reference and role |
 |---|---|---|
-| QuarkChain node | Source changes | All changes after the SlowMist-audited commit [`c5bad53122654bd5677b84abfa4a11acb6bf94d5`](https://github.com/QuarkChain/pyquarkchain/commit/c5bad53122654bd5677b84abfa4a11acb6bf94d5) through the reviewed v1.7 commit [`8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9`](https://github.com/QuarkChain/pyquarkchain/commit/8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9). |
-| QuarkChain node | Pinned Ethash fork | [`QuarkChain/ethash@907b7d8064d3be09536e754bbf469b442f2e213d`](https://github.com/QuarkChain/ethash/commit/907b7d8064d3be09536e754bbf469b442f2e213d). |
-| QuarkChain node | Declared Python dependencies | [PR #994 commit `39ad52e9`](https://github.com/QuarkChain/pyquarkchain/commit/39ad52e94f52518687161c423dc70289a8dd2c5e) and its [exact-version `requirements.txt`](https://github.com/QuarkChain/pyquarkchain/blob/39ad52e94f52518687161c423dc70289a8dd2c5e/requirements.txt). The declared dependencies were scanned with `pip-audit` and reviewed for project impact. |
-| Active QKC ERC-20 | Deployment and verified source | [Ethereum `0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664`](https://etherscan.io/address/0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664#code). The review covered the source and deployed state. |
+| QuarkChain node changes | Source, Ethash, and dependencies | All source changes after the SlowMist-audited commit [`c5bad53122654bd5677b84abfa4a11acb6bf94d5`](https://github.com/QuarkChain/pyquarkchain/commit/c5bad53122654bd5677b84abfa4a11acb6bf94d5) through the reviewed v1.7 commit [`8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9`](https://github.com/QuarkChain/pyquarkchain/commit/8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9). The review also covered the pinned [`QuarkChain/ethash@907b7d80`](https://github.com/QuarkChain/ethash/commit/907b7d8064d3be09536e754bbf469b442f2e213d) implementation and the dependency changes in [PR #994 at commit `39ad52e9`](https://github.com/QuarkChain/pyquarkchain/commit/39ad52e94f52518687161c423dc70289a8dd2c5e), including its [exact-version `requirements.txt`](https://github.com/QuarkChain/pyquarkchain/blob/39ad52e94f52518687161c423dc70289a8dd2c5e/requirements.txt). |
+| QKC Token Contract | Deployment and verified source | [Ethereum `0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664`](https://etherscan.io/address/0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664#code). The review covered the source and deployed state. |
 
 ### 2.2 Review method
 
@@ -44,7 +41,7 @@ Review depth followed potential impact. P1 covered consensus-sensitive changes. 
 The review used the following methods:
 
 - **Change analysis:** Compared the SlowMist-audited version with the reviewed v1.7 version and identified security-sensitive changes.
-- **Code review:** Manually reviewed the security-sensitive node changes and the active Ethereum QKC ERC-20 contract, with Fable 5 assistance.
+- **Code review:** Manually reviewed the security-sensitive node changes and the QKC Token Contract, with Fable 5 assistance.
 - **Dependency review:** Scanned the declared Python dependencies with `pip-audit` and reviewed the results for project impact.
 - **Verification:** Reproduced findings, checked fixes and CI results, ran focused tests, tested public endpoints, and used v1.7 to replay mainnet from genesis.
 
@@ -85,7 +82,7 @@ The review followed the [v1.7 review guide](https://github.com/QuarkChain/pyquar
 | P2 — security and availability | Cluster, P2P, RPC, database, and task lifecycle | `QSR-N-03` and `QSR-N-04` were resolved. |
 | P3 — runtime and support | Python runtime, declared dependencies, tests, CI, Docker, tools, monitoring, and documentation | `QSR-N-05` was resolved. The dependency review found no project-level vulnerability. |
 
-## 4. Active Ethereum QKC ERC-20 Review
+## 4. QKC Token Contract Review
 
 ### 4.1 Deployment and controls
 
@@ -109,13 +106,13 @@ The custom code is limited to initial supply allocation, one-time crowdsale and 
 
 The contract has no `selfdestruct`, `delegatecall`, inline assembly, arbitrary external call, or `tx.origin` authorization. It also has no blacklist, transfer tax, fee, or transfer cap. The owner cannot change the total supply or move user balances.
 
-### 4.2 Contract review
+### 4.2 Source and deployed-state review
 
 The Fable 5.1-assisted manual review covered the full exact-match source and the deployed state observed on 2 September 2026. It found no Critical, High, or Medium vulnerability. It also found no backdoor or hidden administrative path.
 
 Solidity 0.4.24 has no built-in overflow checks. The contract uses `SafeMath` for the reviewed arithmetic. We found no exploitable unchecked arithmetic.
 
-Transfers to the zero address and the token contract itself are rejected.
+Transfers to the zero address and the contract itself are rejected.
 
 Section 6 records three Informational observations and their treatment.
 
@@ -129,8 +126,8 @@ The following records support the review conclusions.
 | Ethash regression test (`QSR-N-01`) | Python 3.13.15; Ethash outputs, Python/`pyethash` consistency, and epoch 520. | **10 passed, 0 failed.** |
 | Public JSON-RPC testing | Tested representative endpoints against [v1.7 review snapshot `8ce6dc53`](https://github.com/QuarkChain/pyquarkchain/commit/8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9). | Availability and expected behavior verified. |
 | Mainnet replay | Replayed mainnet from genesis with [v1.7 review snapshot `8ce6dc53`](https://github.com/QuarkChain/pyquarkchain/commit/8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9). | Completed without a validation failure. |
-| [PR #994](https://github.com/QuarkChain/pyquarkchain/pull/994) declared-dependency scan | At [commit `39ad52e9`](https://github.com/QuarkChain/pyquarkchain/commit/39ad52e94f52518687161c423dc70289a8dd2c5e), used Python 3.13.15 and `pip-audit` 2.10.1: `pip-audit -r requirements.txt --no-deps --disable-pip --vulnerability-service pypi`. | Five advisories matched: four in `cryptography` and one in `ecdsa`. Review of the [cryptography](https://github.com/QuarkChain/pyquarkchain/pull/994#issuecomment-5505785257) and [ecdsa](https://github.com/QuarkChain/pyquarkchain/pull/994#issuecomment-5505852254) code paths found that none are reachable in pyquarkchain. No project-level vulnerability was identified. |
-| [Active Ethereum QKC ERC-20](https://etherscan.io/address/0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664#code) | Reviewed the exact-match source and the state observed on 2 September 2026. Rechecked the owner Safe with Foundry `cast` 1.3.1. | No Critical, High, Medium, or Low issue. The owner is a Gnosis Safe 1.3.0 with an observed 2-of-3 threshold. |
+| [PR #994](https://github.com/QuarkChain/pyquarkchain/pull/994) dependency scan | At [commit `39ad52e9`](https://github.com/QuarkChain/pyquarkchain/commit/39ad52e94f52518687161c423dc70289a8dd2c5e), used Python 3.13.15 and `pip-audit` 2.10.1: `pip-audit -r requirements.txt --no-deps --disable-pip --vulnerability-service pypi`. | `setuptools` was upgraded to 83.0.0 before the scan. Five advisories matched: four in `cryptography` and one in `ecdsa`. Review of the [cryptography](https://github.com/QuarkChain/pyquarkchain/pull/994#issuecomment-5505785257) and [ecdsa](https://github.com/QuarkChain/pyquarkchain/pull/994#issuecomment-5505852254) code paths found that none are reachable in pyquarkchain. No project-level vulnerability was identified. |
+| [QKC Token Contract](https://etherscan.io/address/0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664#code) | Reviewed the exact-match source and the state observed on 2 September 2026. Rechecked the owner Safe with Foundry `cast` 1.3.1. | No Critical, High, Medium, or Low issue. The owner is a Gnosis Safe 1.3.0 with an observed 2-of-3 threshold. |
 
 ## 6. Findings and Remediation
 
@@ -162,11 +159,11 @@ The following records support the review conclusions.
 ### 7.1 Limitations
 
 - The node assessment covered changes from the SlowMist baseline to the v1.7 review snapshot. Unchanged node code was not re-audited line by line.
-- The token state and dependency advisory data were observed on 2 September 2026 and may change.
+- The QKC Token Contract state and node dependency advisory data were observed on 2 September 2026 and may change.
 
 ### 7.2 Conclusion
 
-We found no unresolved vulnerability with Critical, High, or Medium impact on the node, its declared Python dependencies, or the active Ethereum QKC ERC-20 contract. All Low findings were resolved, and all Informational findings were acknowledged. The overall result is **PASS**.
+We found no unresolved vulnerability with Critical, High, or Medium impact on the reviewed QuarkChain node changes or the QKC Token Contract. All Low findings were resolved, and all Informational findings were acknowledged. The overall result is **PASS**.
 
 ## Appendix A — References
 
@@ -180,11 +177,12 @@ We found no unresolved vulnerability with Critical, High, or Medium impact on th
 - [pyquarkchain repository](https://github.com/QuarkChain/pyquarkchain)
 - [Selected SlowMist baseline `c5bad531`](https://github.com/QuarkChain/pyquarkchain/commit/c5bad53122654bd5677b84abfa4a11acb6bf94d5)
 - [Python 3.13 and v1.7 upgrade — PR #978](https://github.com/QuarkChain/pyquarkchain/pull/978)
+- [Dependency pinning and review — PR #994](https://github.com/QuarkChain/pyquarkchain/pull/994)
 - [v1.7 review snapshot `8ce6dc53`](https://github.com/QuarkChain/pyquarkchain/commit/8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9)
 - [v1.7 review guide](https://github.com/QuarkChain/pyquarkchain/blob/419b7c18bac55966fb9b96f59d8340b9158d3f40/docs/github-review-en.md)
 - [Pinned Ethash commit `907b7d80`](https://github.com/QuarkChain/ethash/commit/907b7d8064d3be09536e754bbf469b442f2e213d)
 
-### A.3 QKC token review
+### A.3 QKC Token Contract review
 
-- [Active Ethereum QKC ERC-20 source and state](https://etherscan.io/address/0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664#code)
-- [Token owner Safe](https://etherscan.io/address/0xFa4515EEBEf3BF6C7F2D805F1305aA0BC1dA9523)
+- [QKC Token Contract source and state](https://etherscan.io/address/0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664#code)
+- [Contract owner Safe](https://etherscan.io/address/0xFa4515EEBEf3BF6C7F2D805F1305aA0BC1dA9523)
