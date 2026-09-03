@@ -114,14 +114,21 @@ Section 6 records three Informational observations and their treatment.
 
 The following records support the review conclusions.
 
+### 5.1 Review records
+
 | Evidence | Verification | Result |
 |---|---|---|
 | [PR #978](https://github.com/QuarkChain/pyquarkchain/pull/978) review and CI | Manual and Fable 5-assisted review of [merge commit `f635479d`](https://github.com/QuarkChain/pyquarkchain/commit/f635479d08238b35c67d4da9e1eadd132be7d4b3). | 395 tests and four CI jobs passed. |
-| Ethash regression test (`QSR-N-01`) | Python 3.13.15; Ethash outputs, Python/`pyethash` consistency, and epoch 520. | **10 passed, 0 failed.** |
+| [PR #994](https://github.com/QuarkChain/pyquarkchain/pull/994) dependency scan | At [commit `39ad52e9`](https://github.com/QuarkChain/pyquarkchain/commit/39ad52e94f52518687161c423dc70289a8dd2c5e), ran `pip-audit` 2.10.1: `pip-audit -r requirements.txt --no-deps --disable-pip --vulnerability-service pypi`. | `setuptools` was upgraded to 83.0.0 before the scan. Five advisories matched: four in `cryptography` and one in `ecdsa`. Review of the [cryptography](https://github.com/QuarkChain/pyquarkchain/pull/994#issuecomment-5505785257) and [ecdsa](https://github.com/QuarkChain/pyquarkchain/pull/994#issuecomment-5505852254) code paths found that none are reachable in pyquarkchain. No project-level vulnerability was identified. |
+| [QKC Token Contract](https://etherscan.io/address/0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664#code) | Reviewed the exact-match source and the state observed on 2 September 2026. Rechecked the owner Safe with Foundry `cast` 1.3.1. | No Critical, High, Medium, or Low issue. The owner is a Gnosis Safe 1.3.0 with an observed 2-of-3 threshold. |
+
+### 5.2 Node tests
+
+| Test | Scope | Result |
+|---|---|---|
+| Ethash regression test (`QSR-N-01`) | Checked Ethash outputs, Python/`pyethash` consistency, and epoch 520. | **10 passed, 0 failed.** |
 | Public JSON-RPC testing | Tested representative endpoints against the [planned v1.7 release commit `8ce6dc53`](https://github.com/QuarkChain/pyquarkchain/commit/8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9). | Availability and expected behavior verified. |
 | Mainnet replay | Replayed mainnet from genesis with the [planned v1.7 release commit `8ce6dc53`](https://github.com/QuarkChain/pyquarkchain/commit/8ce6dc53bf1ca74f40e9a1d8d1d36ec7fe6269b9). | Completed without a validation failure. |
-| [PR #994](https://github.com/QuarkChain/pyquarkchain/pull/994) dependency scan | At [commit `39ad52e9`](https://github.com/QuarkChain/pyquarkchain/commit/39ad52e94f52518687161c423dc70289a8dd2c5e), used Python 3.13.15 and `pip-audit` 2.10.1: `pip-audit -r requirements.txt --no-deps --disable-pip --vulnerability-service pypi`. | `setuptools` was upgraded to 83.0.0 before the scan. Five advisories matched: four in `cryptography` and one in `ecdsa`. Review of the [cryptography](https://github.com/QuarkChain/pyquarkchain/pull/994#issuecomment-5505785257) and [ecdsa](https://github.com/QuarkChain/pyquarkchain/pull/994#issuecomment-5505852254) code paths found that none are reachable in pyquarkchain. No project-level vulnerability was identified. |
-| [QKC Token Contract](https://etherscan.io/address/0xea26c4ac16d4a5a106820bc8aee85fd0b7b2b664#code) | Reviewed the exact-match source and the state observed on 2 September 2026. Rechecked the owner Safe with Foundry `cast` 1.3.1. | No Critical, High, Medium, or Low issue. The owner is a Gnosis Safe 1.3.0 with an observed 2-of-3 threshold. |
 
 ## 6. Findings and Remediation
 
