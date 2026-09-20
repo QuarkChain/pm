@@ -39,26 +39,27 @@ Keep QKC's current model. User transactions stay standard. The work splits in tw
 **Source shard**
 
 - A system contract offers the cross-shard call. A user sends a normal transaction to it.
-- The contract writes a log. The messages come from that log, and the CL sends them out. Two ways to collect them: the CL reads the logs over standard RPC, which is how OP derives its L1 to L2 deposits and needs no geth change; or the EL parses the logs and hands the messages to the CL, as in [EIP-6110](https://eips.ethereum.org/EIPS/eip-6110), which needs a geth change. Pick one.
+- The contract writes one log per call. Each log becomes one cross-shard message.
+- Note that this lifts a current limit. Today a contract on the source shard cannot start a cross-shard call. With a system contract, any contract can call it.
+- Two ways to read these logs. The CL reads them over standard RPC: this is how OP derives its L1 to L2 deposits, and it needs no geth change. Or the EL parses them and hands the messages to the CL, as in [EIP-6110](https://eips.ethereum.org/EIPS/eip-6110): this needs a geth change.
 - Note that OP's other direction, L2 to L1, is manual: the user submits a proof and claims the funds. We want both directions automatic, as QKC does today. So borrow the system contract, not the whole OP flow.
 - The CL sends the message straight to the destination shard, as QKC does today. It does not go through the root chain.
 
 **Destination shard**
 
 - The CL picks which messages to apply, based on root-confirmed blocks. This keeps QKC's cursor design.
-- The CL hands them to the EL. How the EL applies them is open: a system tx (OP), or a direct state update outside the transaction list ([EIP-4895](https://eips.ethereum.org/EIPS/eip-4895), and what QKC does today).
+- The CL hands them to the EL. The EL applies them as a system tx (OP), or as a direct state update outside the transaction list ([EIP-4895](https://eips.ethereum.org/EIPS/eip-4895), and what QKC does today).
 
 See also the [cross-chain comparison](https://github.com/QuarkChain/pm/blob/main/L1/cross-chain-comparison.md).
 
 Questions to answer:
 
-1. **EL interface:** System tx or direct apply? Which needs the least geth change?
-2. **Keep QKC semantics:** The cursor and the message flow should match QKC today. Check each one still works here. Write down anything we cannot keep.
-3. **Calls from a contract:** QKC already supports calling a contract on the destination shard, but a contract on the source shard cannot start a cross-shard call. With a system contract, any contract can call it, so this case should now work. Confirm it, and define what happens when the destination call fails.
+1. **Reading the logs:** CL over RPC, or the EL parses them? Which fits better?
+2. **Applying at the destination:** System tx or direct apply? Which needs the least geth change?
 
 ## Design note 2: PoSW
 
-Today, stake is the miner's balance in the shard state. Enough stake lowers the PoW difficulty. Each block mined in the window must be backed by its own stake, so the miner cannot spend the balance while it counts: for any address that mined in the PoSW window, a transfer fails if it would drop the balance below `blocks mined in window * stake per block`. The check sits in the EVM call path, so it covers both plain transfers and calls.
+Today, stake is the miner's balance in the shard state. Enough stake lowers the PoW difficulty. Each block mined in the window must be backed by its own stake, so the miner cannot spend the balance while it counts: for any address that mined in the PoSW window, a transfer fails if it would drop the balance below `blocks mined in window * stake per block`. The check sits in the EVM call path, so keeping this rule means patching geth's EVM.
 
 Questions to answer:
 
@@ -68,24 +69,20 @@ Questions to answer:
 
 ## Design note 3: Virtual connections
 
-Today, shard traffic shares the master's peer link. Messages are routed by `(branch, peer id)`.
+Today, shard traffic shares the master's peer link. Messages are routed by `(branch, peer id)`. Blocks must come from the QKC layer, since geth cannot validate a QKC block. Whether geth's own transaction gossip is reused is open.
 
-Questions to answer:
-
-1. **Transport:** Keep this, use a simpler shared link, or give each shard its own peer network?
-2. **geth P2P:** Can we turn it off and let the QKC layer move blocks and transactions?
+Question to answer: keep virtual connections, use a simpler shared link, or give each shard its own peer network?
 
 ## First devnet
 
 One master, two or more shards, each shard on **stock geth** (zero diff).
 
 - The root chain and all shards make blocks.
-- Root blocks include shard blocks. Shard blocks follow the root chain.
+- Root blocks include shard block headers. Shard blocks follow the root chain.
 - Normal transfers work on each shard.
-- geth's own P2P is off. The CL moves blocks.
-- No cross-shard, no PoSW, no real rewards yet.
+- No cross-shard and no PoSW yet.
 
-Running several `geth --dev` chains side by side is not enough. The CL must drive geth through the Engine API, and root and shards must be linked.
+Running several `geth --dev` chains side by side is not enough. The CL must drive geth through the Engine API. The link to the root chain lives in the master and the CLs; geth knows nothing about it.
 
 ## Follow-up actions
 
