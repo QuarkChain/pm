@@ -40,8 +40,8 @@ Keep QKC's current model. User transactions stay standard. The work splits in tw
 
 - A system contract offers the cross-shard call. A user sends a normal transaction to it.
 - The contract writes one log per call. Each log becomes one cross-shard message.
-- Note that this lifts a current limit. Today a contract on the source shard cannot start a cross-shard call. With a system contract, any contract can call it.
-- Two ways to read these logs. The CL reads them over standard RPC: this is how OP derives its L1 to L2 deposits, and it needs no geth change. Or the EL parses them and hands the messages to the CL, as in [EIP-6110](https://eips.ethereum.org/EIPS/eip-6110): this needs a geth change.
+- Contracts as callers. Today a contract on the source shard cannot start a cross-shard call. A system contract could allow it, but then we must decide the `msg.sender` on the destination shard: the same address, or an alias (as OP does). To keep it simple, for now only an EOA on the source shard can call the system contract. The target on the destination shard can still be a contract.
+- Two ways to read these logs. The CL reads them from geth's JSON-RPC (e.g. `eth_getLogs`): this is how OP derives its L1 to L2 deposits, and it needs no geth change. Or the EL parses them and hands the messages to the CL, as in [EIP-6110](https://eips.ethereum.org/EIPS/eip-6110): this needs a geth change.
 - Note that OP's other direction, L2 to L1, is manual: the user submits a proof and claims the funds. We want both directions automatic, as QKC does today. So borrow the system contract, not the whole OP flow.
 - The CL sends the message straight to the destination shard, as QKC does today. It does not go through the root chain.
 
@@ -54,8 +54,8 @@ See also the [cross-chain comparison](https://github.com/QuarkChain/pm/blob/main
 
 Questions to answer:
 
-1. **Reading the logs:** CL over RPC, or the EL parses them? Which fits better?
-2. **Applying at the destination:** System tx or direct apply? Which needs the least geth change?
+1. **Reading the logs:** CL via geth's JSON-RPC, or the EL parses them, as described under Source shard? Which fits better?
+2. **Applying at the destination:** System tx or direct apply, as described under Destination shard? Which needs the least geth change?
 
 ## Design note 2: PoSW
 
