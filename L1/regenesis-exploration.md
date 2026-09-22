@@ -1,4 +1,4 @@
-# QuarkChain 2.0: Regenesis Exploration
+# Modernized QuarkChain Exploration
 
 ## Motivation
 
