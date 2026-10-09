@@ -25,6 +25,10 @@ This guide assumes that:
 - You followed the guide
   [Start Clusters on the QuarkChain](https://github.com/QuarkChain/pyquarkchain/wiki/Start-Clusters-on-the-QuarkChain).
 
+**The data upgrade is irreversible.** Once v1.7.0 has used your node data,
+it cannot be reused with v1.6.*. Back up the data before upgrading only if
+you plan to use it with v1.6.* again.
+
 Choose your upgrade path:
 
 | Where is your node data now? | What to do |
@@ -66,7 +70,8 @@ container.
 3. Start a new container. Use the same host data directory as before:
 
    ```bash
-   docker run -v <host-data-dir>:/code/pyquarkchain/quarkchain/cluster/qkc-data/mainnet \
+   docker run --name <new-container-name> \
+     -v <host-data-dir>:/code/pyquarkchain/quarkchain/cluster/qkc-data/mainnet \
      -it -d --ulimit nofile=1048576:1048576 \
      -p 38291:38291 -p 38391:38391 -p 38491:38491 -p 38291:38291/udp \
      quarkchaindocker/pyquarkchain:mainnet1.7.0
@@ -75,13 +80,14 @@ container.
 4. Open a shell in the new container:
 
    ```bash
-   docker exec -it <new-container-id> bash
+   docker exec -it <new-container-name> bash
    ```
 
 5. Edit `mainnet/singularity/cluster_config_template.json` to fit your setup.
    For example, set `JSON_RPC_HOST` to `0.0.0.0` if you serve the public RPC to
-   other machines. If you changed this file in your old container, apply the
-   same changes here.
+   other machines. Reapply any custom settings from your old container,
+   including `ENABLE_TRANSACTION_HISTORY`: the template defaults to `false`,
+   so set it to `true` if transaction history was enabled on your old node.
 
 6. Start the node:
 
