@@ -115,7 +115,7 @@ first. Then follow Option A.
 2. Copy the data to the host:
 
    ```bash
-   docker cp <old-container-id>:/code/pyquarkchain/quarkchain/cluster/qkc-data/mainnet <host-data-dir>
+   docker cp <old-container-id>:/code/pyquarkchain/quarkchain/cluster/qkc-data/mainnet/. <host-data-dir>
    ```
 
    The data is several hundred GB. This step can take a long time. Make sure the
