@@ -6,10 +6,10 @@ Architecture: one master (root chain), one Shard CL per shard (hosted by slaves)
 
 - A shard block is a post-Merge geth block. All QKC fields go in `extraData` (117 bytes): version, shardId, prevRootBlock, cursor, nonce, mixhash.
 - sealHash is the header hash with nonce and mixhash zeroed. After mining, the CL writes the seal into `extraData`, then calls `newPayload`.
-- Difficulty follows today's rule. `prevRandao` = difficulty.
+- Difficulty is stored in the mixDigest field which replaces header.difficulty in sealHash calculation (header.difficulty always equal to zero following eth's rule).
 - PoW: Ethash (root, chains 0–5), QKCHashX (chains 6–7), simulate for the devnet. Keep `getWork`/`submitWork`.
 - PoSW: stake is in a `ShardPoSW` system contract. The CL reads it at the parent block.
-- Block reward: implement it in consenses.go .
+- Block reward: implement it in consensus.go .
 - Tx fees: share with the root miner (`local_fee_rate`), or not?
   - Share: keeps today's economics. It needs a geth patch, a fee total in `extraData`, and a change to the root reward.
   - Don't share (stock EIP-1559): no change. The base fee is burned and the miner gets the tip. Root miners earn no fees. Shard miners earn less only under congestion; with today's low traffic, the base fee is near zero.
