@@ -4,17 +4,16 @@ Architecture: one master (root chain), one Shard CL per shard (hosted by slaves)
 
 ## 1. Shard block and PoSW
 
-- A shard block is a post-Merge geth block. All QKC fields go in `extraData` (117 bytes): version, shardId, prevRootBlock, cursor, difficulty, nonce, mixhash.
+- A shard block is a post-Merge geth block. All QKC fields go in `extraData` (117 bytes): version, shardId, prevRootBlock, cursor, nonce, mixhash.
 - sealHash is the header hash with nonce and mixhash zeroed. After mining, the CL writes the seal into `extraData`, then calls `newPayload`.
 - Difficulty follows today's rule. `prevRandao` = difficulty.
 - PoW: Ethash (root, chains 0–5), QKCHashX (chains 6–7), simulate for the devnet. Keep `getWork`/`submitWork`.
 - PoSW: stake is in a `ShardPoSW` system contract. The CL reads it at the parent block.
-- Block reward: a withdrawal (EIP-4895) to the coinbase. Post-Merge geth pays no reward.
+- Block reward: implement it in consenses.go .
 - Tx fees: share with the root miner (`local_fee_rate`), or not?
   - Share: keeps today's economics. It needs a geth patch, a fee total in `extraData`, and a change to the root reward.
   - Don't share (stock EIP-1559): no change. The base fee is burned and the miner gets the tip. Root miners earn no fees. Shard miners earn less only under congestion; with today's low traffic, the base fee is near zero.
   - Leaning: don't share for now. Fees are small next to the block reward. Revisit if fees become the main income.
-- The CL checks what geth skips: `extraData`, PoW, `prevRandao`, withdrawals.
 
 ## 2. Cluster config, CL node, AddShardBlock / AddRootBlock
 
