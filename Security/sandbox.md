@@ -261,20 +261,22 @@ Run these in a VS Code terminal connected to `ai-sandbox`. Run the GitHub check 
 | `GIT_TERMINAL_PROMPT=0 git ls-remote https://github.com/<org>/<private-repo> 2>&1 \| tail -1` | Fails (`could not read Username`) |
 | `mount \| grep -Ei 'host_mnt\|/Users\|/run/desktop\|virtiofs\|grpcfuse\|fakeowner\|9p'` | No output |
 | `ls /var/run/docker.sock 2>&1` | `No such file` |
-| `git config --global --list` | Only what you set in step 7 |
+| `git config --global --list` | Before step 7: empty (`fatal: unable to read config file`). After step 7: only what you set there. |
 
 ### 8.3 VS Code's Git sign-in channel
 
 This check runs Git through VS Code's own askpass directly, the way a malicious process could:
 
 ```bash
-b=$(ls -d ~/.vscode-server/bin/* | head -1)
-VSCODE_GIT_IPC_HANDLE=$(ls /tmp/vscode-git-*.sock | head -1) \
+b=$(ls -d ~/.vscode-server/cli/servers/*/server ~/.vscode-server/bin/* 2>/dev/null | head -1)
+VSCODE_GIT_IPC_HANDLE=$(ls -t /tmp/vscode-git-*.sock | head -1) \
 VSCODE_GIT_ASKPASS_NODE=$b/node \
 VSCODE_GIT_ASKPASS_MAIN=$b/extensions/git/dist/askpass-main.js \
 GIT_ASKPASS=$b/extensions/git/dist/askpass.sh \
 git ls-remote https://github.com/<org>/<private-repo> 2>&1 | tail -1
 ```
+
+Replace `<org>/<private-repo>` with a real private repo that your host GitHub account can access. If you paste it unchanged, bash treats `<org>` as a redirect and the check fails without testing anything.
 
 Expected: VS Code on the host shows a username prompt. Press **Esc**, and the command fails. If it succeeds **without any prompt**, the host is handing out a GitHub session. Recheck step 2 and the Accounts menu.
 
