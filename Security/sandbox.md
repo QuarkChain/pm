@@ -259,7 +259,7 @@ Run these in a VS Code terminal connected to `ai-sandbox`. Run the GitHub check 
 | `ls /tmp \| grep -E 'vscode-(ssh-auth\|remote-containers)'` | No output. If you see output, you are connected through Dev Containers, not Remote-SSH. |
 | `env \| grep -iE 'askpass\|token\|secret\|password'` | No output |
 | `GIT_TERMINAL_PROMPT=0 git ls-remote https://github.com/<org>/<private-repo> 2>&1 \| tail -1` | Fails (`could not read Username`) |
-| `mount \| grep -Ei 'host_mnt\|/Users\|c:'` | No output |
+| `mount \| grep -Ei 'host_mnt\|/Users\|/run/desktop\|virtiofs\|grpcfuse\|fakeowner\|9p'` | No output |
 | `ls /var/run/docker.sock 2>&1` | `No such file` |
 | `git config --global --list` | Only what you set in step 7 |
 
@@ -318,21 +318,3 @@ Then redo steps 5–7.
 4. **Anything you put in the sandbox is visible to the AI**: PATs, deploy keys, the Claude login, `.env` files.
 5. **Shared kernel.** A kernel or Docker Desktop bug could allow a container escape. Keep Docker Desktop updated.
 
----
-
-## 12. Migrating from the Dev Containers setup
-
-1. Copy the code from the old volume after step 5 has created the new one:
-   ```bash
-   docker run --rm -v claude-sandbox-ws:/from:ro -v ai-sandbox_workspaces:/to ubuntu:24.04 cp -a /from/. /to/
-   ```
-2. Remove the old setup:
-   ```bash
-   docker rm -f claude-sandbox
-   docker volume rm claude-sandbox-ws claude-sandbox-home
-   rm -rf ~/sandbox/.devcontainer
-   ```
-3. **Rotate host credentials if untrusted code ran in the old sandbox.** That setup exposed the host's Git credentials and SSH agent.
-   - GitHub CLI: GitHub → **Settings → Applications → Authorized OAuth Apps → GitHub CLI → Revoke**, then run `gh auth login` again.
-   - Any other token your host Git credential helper stores (macOS Keychain, Git Credential Manager).
-   - SSH keys that were loaded in the host agent (`ssh-add -l`) while the old sandbox was connected.
