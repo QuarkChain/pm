@@ -84,7 +84,7 @@ WORKDIR /home/${USERNAME}
   "workspaceMount": "source=claude-sandbox-ws,target=/workspaces,type=volume",
   "workspaceFolder": "/workspaces",
 
-  // Home dir (Claude login, git config) persists across rebuilds
+  // Home dir (login, git config) persists across rebuilds
   "mounts": [
     "source=claude-sandbox-home,target=/home/dev,type=volume"
   ],
